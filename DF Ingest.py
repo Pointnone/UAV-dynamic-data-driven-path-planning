@@ -57,16 +57,18 @@ def extractCityShapes(filename):
     namespaces = {'fme': 'http://www.safe.com/gml/fme',
                   'gml': 'http://www.opengis.net/gml/3.2'}
     
-    for cfm in r.findall("gml:featureMembeScreenshot from 2023-02-07 14-38-30r", namespaces):
+    for cfm in r.findall("gml:featureMember", namespaces):
         cbb = cfm.find("fme:bebyggelse", namespaces)
         placetype = cbb.find("fme:bebyggelsestype", namespaces).text
         
         if(placetype == "by"):
             population = int(cbb.find("fme:indbyggertal", namespaces).text)
             placename = cbb.find("fme:navn_1_skrivemaade", namespaces).text
-            shape = [coord.split(" ") for coord in ((cbb.find("gml:multiSurfaceProperty/gml:MultiSurface/gml:surfaceMember/gml:Surface/gml:patches/gml:PolygonPatch/gml:exterior/gml:LinearRing/gml:posList", namespaces).text)[0:-2].split(" 0 "))] # TODO: Fix assumption about it being only one surface
+            shape = [(coord.text)[0:-2].split(" 0 ") for coord in (cbb.iterfind(".//gml:posList", namespaces))][0] # TODO: Fix assumption about it being only one surface
+            #print(shape)
+            shape = [c.split(" ") for c in shape]
             
-            if(population >= 200):
+            if(population >= 1000):
                 #print(placename, population)
                 shape = [transformer.transform(c[0], c[1]) for c in shape]            
                 cities.append({'name': placename, 'pop': population, 'shape': Polygon([shape])})
