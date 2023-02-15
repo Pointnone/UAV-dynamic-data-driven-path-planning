@@ -5,20 +5,14 @@ Created on Thu Feb  2 16:21:13 2023
 
 @author: point
 """
-from dotenv import load_dotenv
-from pathlib import Path
 import os
 
 import requests
 import pygrib
 
-env_path = Path('./.env')
-load_dotenv(dotenv_path=env_path)
+import numpy as np
 
-DMI_API_KEY = os.getenv('DMI_API_KEY')
-#print(DMI_API_KEY)
-
-def findLatest():
+def findLatest(DMI_API_KEY):
     url = 'https://dmigw.govcloud.dk/v1/forecastdata/collections/harmonie_nea_sf/items'
     headers = {'X-Gravitee-Api-Key': DMI_API_KEY}
     r = requests.get(url, headers=headers)
@@ -29,9 +23,12 @@ def findLatest():
     latest_url = resp['features'][-1]['asset']['data']['href']
     return latest_url
     
-def getGribFile(url):
+def getGribFile(url, DMI_API_KEY):
     filename = url.split('/')[-1]
     headers = {'X-Gravitee-Api-Key': DMI_API_KEY}
+
+    if(os.path.exists(filename)):
+        return filename # Terminate early if file already exists
     
     with requests.get(url, headers=headers, stream=True) as req:
         req.raise_for_status()
@@ -40,8 +37,21 @@ def getGribFile(url):
                 fd.write(chunk)
     return filename
 
-last = findLatest()
-grib_file = getGribFile(last)
+def buildDBRecords(type, lats, lons, measures, is_sim = False, sim_layer = 0):
+    if(len(lats) != len(lons) or len(lons) != len(measures)):
+        print("WTF") # TODO: Throw error here
+    
+    records = [{"mtype": type, 
+                "lat": lats[i], 
+                "long": lons[i], 
+                "meas": measures[i],
+                "sim": is_sim,
+                "sim_layer": sim_layer} for i in range(len(lats))]
 
-grbs = pygrib.open("./" + grib_file)
-grbs.seek(0)
+    return records
+
+#if(__name__ == "__main__"):
+#    last = findLatest()
+#    grib_file = getGribFile(last)
+#    grbs = pygrib.open("./" + grib_file)
+#    grbs.seek(0)

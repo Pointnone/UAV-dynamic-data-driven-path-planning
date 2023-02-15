@@ -1,5 +1,8 @@
-CREATE TABLE Test (
-    test1 Integer PRIMARY KEY NOT NULL,
-    test2 VARCHAR(25),
-    test3 Time
+CREATE TABLE DMI (
+    mtype VARCHAR(7),
+    lat Float,
+    long Float,
+    meas Float,
+    sim Boolean,
+    sim_layer Integer
 )

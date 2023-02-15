@@ -5,7 +5,6 @@ Created on Mon Feb  6 14:57:45 2023
 
 @author: point
 """
-from dotenv import load_dotenv
 from pathlib import Path
 import os
 
@@ -18,14 +17,8 @@ import xml.etree.ElementTree as ET
 import pyproj as proj
 from geojson import Polygon
 
-env_path = Path('./.env')
-load_dotenv(dotenv_path=env_path)
-
-host = "ftp3.datafordeler.dk"
-DF_USER = os.getenv('DF_USER')
-DF_PASS = os.getenv('DF_PASS')
-
-def downloadDF():
+def downloadDF(DF_USER, DF_PASS):
+    host = "ftp3.datafordeler.dk"
     ftp = ftplib.FTP(host, DF_USER, DF_PASS)
     
     filename = [f for f in ftp.nlst() if "GML" in f][0]
@@ -72,8 +65,8 @@ def extractCityShapes(filename):
                 cities.append({'name': placename, 'pop': population, 'shape': Polygon([shape])})
     return cities
     
-filename = downloadDF()
-unzip(filename, "bebyggelse.gml")
-cities = extractCityShapes("bebyggelse.gml")
-
-print(len(cities))
+#if(__name__ == "__main__"):
+#    filename = downloadDF()
+#    unzip(filename, "bebyggelse.gml")
+#    cities = extractCityShapes("bebyggelse.gml")
+#    print(len(cities))
