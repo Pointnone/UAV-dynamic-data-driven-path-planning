@@ -61,15 +61,13 @@ def extractCityShapes(filename):
         cbb = cfm.find("fme:bebyggelse", namespaces)
         placetype = cbb.find("fme:bebyggelsestype", namespaces).text
         
-        if(placetype == "by"):
+        if(placetype == "by" and cbb.find("fme:indbyggertal", namespaces).text):
             population = int(cbb.find("fme:indbyggertal", namespaces).text)
             placename = cbb.find("fme:navn_1_skrivemaade", namespaces).text
             shape = [(coord.text)[0:-2].split(" 0 ") for coord in (cbb.iterfind(".//gml:posList", namespaces))][0] # TODO: Fix assumption about it being only one surface
-            #print(shape)
             shape = [c.split(" ") for c in shape]
             
             if(population >= 1000):
-                #print(placename, population)
                 shape = [transformer.transform(c[0], c[1]) for c in shape]            
                 cities.append({'name': placename, 'pop': population, 'shape': Polygon([shape])})
     return cities
@@ -78,4 +76,4 @@ filename = downloadDF()
 unzip(filename, "bebyggelse.gml")
 cities = extractCityShapes("bebyggelse.gml")
 
-print([c for c in cities if c['name'] == "Solrød Strand"][0])
+print(len(cities))

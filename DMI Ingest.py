@@ -45,13 +45,3 @@ grib_file = getGribFile(last)
 
 grbs = pygrib.open("./" + grib_file)
 grbs.seek(0)
-
-#grb = grbs[42]
-#print(grb)
-
-#lats, lons = grb.latlons()
-
-#print(len(lats[0]))
-#print("-----")
-#print(len(lons))
-#print(len(grb.values[0]))
