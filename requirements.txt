@@ -1,3 +1,4 @@
 python-dotenv == 0.21.1
 pygrib == 2.1.4
 requests == 2.28.1
+sqlalchemy == 1.4.39
