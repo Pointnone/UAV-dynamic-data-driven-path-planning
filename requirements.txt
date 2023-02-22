@@ -3,3 +3,6 @@ pygrib == 2.1.4
 requests == 2.28.1
 sqlalchemy == 1.4.39
 psycopg2 == 2.9.5
+GeoAlchemy2 == 0.13.1
+cfgrib
+xarray

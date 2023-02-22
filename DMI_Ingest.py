@@ -8,7 +8,6 @@ Created on Thu Feb  2 16:21:13 2023
 import os
 
 import requests
-import pygrib
 
 import numpy as np
 
@@ -22,6 +21,23 @@ def findLatest(DMI_API_KEY):
     # TODO: Consider iterating through to find the actual latest. Assumption: Last in the list is the latest
     latest_url = resp['features'][-1]['asset']['data']['href']
     return latest_url
+
+def findBefore(DMI_API_KEY, last_url):
+    url = 'https://dmigw.govcloud.dk/v1/forecastdata/collections/harmonie_nea_sf/items'
+    headers = {'X-Gravitee-Api-Key': DMI_API_KEY}
+    r = requests.get(url, headers=headers)
+
+    resp = r.json()   
+    feat_list = resp['features']
+
+    hrefs = [x['asset']['data']['href'] for x in feat_list]
+    # TODO: Take into account that it must be from the same model run
+    idx = hrefs.index(last_url)
+    #print(hrefs)
+    #idx = [i for i, x in enumerate(feat_list) if x['asset']['data']['href'] == url][0]
+
+    before_url = feat_list[idx-1]['asset']['data']['href']
+    return before_url
     
 def getGribFile(url, DMI_API_KEY):
     filename = url.split('/')[-1]
@@ -37,14 +53,15 @@ def getGribFile(url, DMI_API_KEY):
                 fd.write(chunk)
     return filename
 
-def buildDBRecords(type, lats, lons, measures, is_sim = False, sim_layer = 0):
-    if(len(lats) != len(lons) or len(lons) != len(measures)):
-        print("WTF") # TODO: Throw error here
+def buildDBRecords(lats, lons, measures, dts, is_sim = False, sim_layer = 0):
+    #if(len(lats) != len(lons) or len(lons) != len(measures)):
+    #    print("WTF") # TODO: Throw error here
     
-    records = [{"mtype": type, 
-                "lat": lats[i], 
-                "long": lons[i], 
-                "meas": measures[i],
+    records = [{"geom": f'POINT({lons[i]} {lats[i]})',
+                "precip_meas": measures['precip'][i],
+                "winddir_meas": measures['winddir'][i],
+                "windspd_meas": measures['windspd'][i],
+                "dt": dts,
                 "sim": is_sim,
                 "sim_layer": sim_layer} for i in range(len(lats))]
 
