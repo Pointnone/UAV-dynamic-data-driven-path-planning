@@ -34,3 +34,10 @@ CREATE TABLE df (
     sim BOOLEAN,
     sim_layer INTEGER
 );
+
+CREATE TABLE cell (
+    geom GEOMETRY,
+    technology VARCHAR(15),
+    sim BOOLEAN,
+    sim_layer INTEGER
+)

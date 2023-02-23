@@ -19,6 +19,7 @@ from datetime import datetime
 
 from DF_Ingest import *
 from DMI_Ingest import *
+from TDC_Ingest import *
 
 def environmentVars():
     env_path = Path('./.env')
@@ -37,5 +38,6 @@ def setupDB():
 
 environmentVars()
 setupDB()
-updateDFData(DF_USER, DF_PASS, engine, meta, dbsm)
-updateDMIData(DMI_API_KEY, engine, meta, dbsm)
+updateTDCData(engine, meta, dbsm)
+#updateDFData(DF_USER, DF_PASS, engine, meta, dbsm)
+#updateDMIData(DMI_API_KEY, engine, meta, dbsm)
