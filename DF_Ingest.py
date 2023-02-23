@@ -17,6 +17,10 @@ import xml.etree.ElementTree as ET
 import pyproj as proj
 from geojson import Polygon
 
+from sqlalchemy import Table, Column, Float, Integer, String, MetaData, create_engine, insert
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine import URL
+
 def downloadDF(DF_USER, DF_PASS):
     host = "ftp3.datafordeler.dk"
     ftp = ftplib.FTP(host, DF_USER, DF_PASS)
@@ -64,6 +68,35 @@ def extractCityShapes(filename):
                 shape = [transformer.transform(c[0], c[1]) for c in shape]            
                 cities.append({'name': placename, 'pop': population, 'shape': Polygon([shape])})
     return cities
+
+def buildPostGISSimplePoly(poly):
+    coord_wrap = lambda c : (" ").join([str(f) for f in c])
+    poly_wrap = lambda p : f'({(", ").join([coord_wrap(c) for c in p])})'
+    poly_str = f'POLYGON({(",").join([poly_wrap(polygon) for polygon in poly["coordinates"]])})'
+
+    return poly_str
+
+def buildCityDBRecords(cities, is_sim = False, sim_layer = 0):
+    # POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))
+
+    records = [{"geom": buildPostGISSimplePoly(cities[i]['shape']),
+                "itype": "city",
+                "sim": is_sim,
+                "sim_layer": sim_layer} for i in range(len(cities))]
+
+    return records
+
+def updateDFData(DF_USER, DF_PASS, engine, meta, dbsm):
+    filename = downloadDF(DF_USER, DF_PASS)
+    
+    # TODO: Add other sources?
+    unzip(filename, "bebyggelse.gml")
+    cities = extractCityShapes("bebyggelse.gml")
+
+    with dbsm() as session:
+        DF_Table = Table("df", meta, autoload_with=engine) # Table Reflection
+        session.execute(insert(DF_Table), buildCityDBRecords(cities))
+        session.commit()
     
 #if(__name__ == "__main__"):
 #    filename = downloadDF()

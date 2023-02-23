@@ -9,9 +9,7 @@ from dotenv import load_dotenv
 from pathlib import Path
 import os
 
-import pygrib
 import numpy as np
-#import cfgrib
 
 from sqlalchemy import Table, Column, Float, Integer, String, MetaData, create_engine, insert
 from sqlalchemy.orm import sessionmaker
@@ -37,50 +35,7 @@ def setupDB():
     global meta; meta = MetaData()
     global dbsm; dbsm = sessionmaker(engine)
 
-global DMI_idxs
-DMI_idxs = [
-    {'idx': 42, 'mtype': 'precip'},
-    {'idx': 87, 'mtype': 'winddir'},
-    {'idx': 88, 'mtype': 'windspd'}
-]
-
-def updateDMIData():
-    # TODO: Get all datapoint from last modelrun
-    last = findLatest(DMI_API_KEY)
-    grib_file = getGribFile(last, DMI_API_KEY)
-
-    grbs = pygrib.open(f"./{grib_file}")
-
-    time_str = (" ").join(grib_file.split("_")[-1].split(".")[0][:-1].split("T"))
-    time_str = time_str[:-4] + ":" + time_str[-4:-2] + ":" + time_str[-2:]
-    
-    setupDB()
-    values = {}
-    
-    for DMI_idx in DMI_idxs:
-        grb = grbs[DMI_idx['idx']]
-
-        values[DMI_idx['mtype']] = np.array(grb['values']).reshape(-1)
-        
-        if("(accum)" in grb.__str__()):
-            before = findBefore(DMI_API_KEY, last)
-            before_grib_file = getGribFile(before, DMI_API_KEY)
-
-            before_grbs = pygrib.open(f"./{before_grib_file}")
-            before_grb = before_grbs[DMI_idx['idx']]
-
-            before_values = np.array(before_grb['values']).reshape(-1)
-
-            values[DMI_idx['mtype']] -= before_values # Element-wise list subtraction
-    
-    lats, lons = grbs[42].latlons()
-    lats = np.array(lats).reshape(-1)
-    lons = np.array(lons).reshape(-1)
-
-    with dbsm() as session:
-        DMI_Table = Table("dmi", meta, autoload_with=engine) # Table Reflection
-        session.execute(insert(DMI_Table), buildDBRecords(lats, lons, values, time_str))
-        session.commit()
-
 environmentVars()
-updateDMIData()
+setupDB()
+updateDFData(DF_USER, DF_PASS, engine, meta, dbsm)
+updateDMIData(DMI_API_KEY, engine, meta, dbsm)

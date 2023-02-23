@@ -27,3 +27,10 @@ CREATE TABLE dmi (
     sim BOOLEAN,
     sim_layer INTEGER
 );
+
+CREATE TABLE df (
+    geom GEOMETRY,
+    itype VARCHAR(10),
+    sim BOOLEAN,
+    sim_layer INTEGER
+);
