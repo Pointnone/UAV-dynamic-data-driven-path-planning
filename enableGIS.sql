@@ -40,4 +40,23 @@ CREATE TABLE cell (
     technology VARCHAR(15),
     sim BOOLEAN,
     sim_layer INTEGER
-)
+);
+
+CREATE TABLE zone (
+    geom GEOMETRY,
+    zname VARCHAR(25) PRIMARY KEY NOT NULL,
+    ztype VARCHAR(15),
+    sim BOOLEAN,
+    sim_layer INTEGER
+);
+
+CREATE TABLE notam (
+    zname VARCHAR(25),
+    act_from TIMESTAMP,
+    act_to TIMESTAMP,
+    sim BOOLEAN,
+    sim_layer INTEGER,
+    CONSTRAINT fk_zone
+        FOREIGN KEY(zname) 
+	        REFERENCES zone(zname)
+);

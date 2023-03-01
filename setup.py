@@ -20,6 +20,7 @@ from datetime import datetime
 from DF_Ingest import *
 from DMI_Ingest import *
 from TDC_Ingest import *
+from Naviair_Ingest import *
 
 def environmentVars():
     env_path = Path('./.env')
@@ -29,6 +30,7 @@ def environmentVars():
     global DF_USER; DF_USER = os.getenv('DF_USER')
     global DF_PASS; DF_PASS = os.getenv('DF_PASS')
     global DB_PASSWORD; DB_PASSWORD = os.getenv('DB_PASSWORD')
+    global NAVIAIR_API_KEY; NAVIAIR_API_KEY = os.getenv('NAVIAIR_API_KEY')
 
 def setupDB():
     urlObj = URL("postgresql", "postgres", DB_PASSWORD, "localhost", 5432, "geomdata")
@@ -39,5 +41,6 @@ def setupDB():
 environmentVars()
 setupDB()
 updateTDCData(engine, meta, dbsm)
-#updateDFData(DF_USER, DF_PASS, engine, meta, dbsm)
-#updateDMIData(DMI_API_KEY, engine, meta, dbsm)
+updateNaviairData(NAVIAIR_API_KEY, engine, meta, dbsm)
+updateDFData(DF_USER, DF_PASS, engine, meta, dbsm)
+updateDMIData(DMI_API_KEY, engine, meta, dbsm)
