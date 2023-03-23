@@ -11,7 +11,7 @@ import os
 
 import numpy as np
 
-from sqlalchemy import Table, Column, Float, Integer, String, MetaData, create_engine, insert
+from sqlalchemy import MetaData, create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import URL
 
@@ -37,10 +37,12 @@ def setupDB():
     global engine; engine = create_engine(urlObj, echo=False)
     global meta; meta = MetaData()
     global dbsm; dbsm = sessionmaker(engine)
+    return engine, meta, dbsm
 
-environmentVars()
-setupDB()
-updateTDCData(engine, meta, dbsm)
-updateNaviairData(NAVIAIR_API_KEY, engine, meta, dbsm)
-updateDFData(DF_USER, DF_PASS, engine, meta, dbsm)
-updateDMIData(DMI_API_KEY, engine, meta, dbsm)
+if(__name__ == "__main__"):
+    environmentVars()
+    setupDB()
+    updateTDCData(engine, meta, dbsm)
+    updateNaviairData(NAVIAIR_API_KEY, engine, meta, dbsm)
+    updateDFData(DF_USER, DF_PASS, engine, meta, dbsm)
+    updateDMIData(DMI_API_KEY, engine, meta, dbsm)

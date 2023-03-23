@@ -1,0 +1,38 @@
+from sqlalchemy import Table, select, func
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine import URL
+
+from geoalchemy2 import Geometry, shape
+from shapely import LineString, Polygon, Point, to_wkt
+
+import xml.etree.ElementTree as ET
+
+import pyproj as proj
+from geojson import Polygon
+
+from setup import setupDB, environmentVars
+
+def waypoint_to_linestring(waypoints):
+    return to_wkt(LineString(waypoints))
+
+def extract_db_data(tables, engine, meta, dbsm, waypoints, radius = 0.25):
+    ret = {}
+    with dbsm() as session:
+        for table in tables:
+            C_Table = Table(table, meta, autoload_with=engine)
+            c = func.ST_Buffer(waypoint_to_linestring(waypoints), radius, 'endcap=round join=round')
+            s = select([C_Table], C_Table.c.geom.ST_Intersects(c))
+            res = [dict(r) for r in session.execute(s).all()]
+
+            for row in res:
+                row['geom'] = shape.to_shape(row['geom'])
+            
+            ret[table] = res
+    return ret
+    
+if(__name__ == "__main__"):
+    environmentVars()
+    engine, meta, dbsm = setupDB()
+    waypoints = [(9.538999, 55.706185), (9.538999, 54.979835), (12.004298, 54.979835)]
+    data = extract_db_data(["df", "dmi", "cell", "zone"], engine, meta, dbsm, waypoints, 0.25)
+    print(data)
