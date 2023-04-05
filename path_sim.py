@@ -1,6 +1,7 @@
 from pyproj import Geod
+from datetime import datetime, timedelta
 
-def simpleSimulate(waypoints, speed = 15.0, temporal_res = 1.0):
+def simpleSimulate(waypoints, start_time = datetime.now(), speed = 15.0, temporal_res = 1.0):
     g = Geod(ellps="WGS84")
 
     sim_points = [waypoints[0]]
@@ -17,12 +18,17 @@ def simpleSimulate(waypoints, speed = 15.0, temporal_res = 1.0):
     for i in range(len(zipped_points)):
         z = zipped_points[i]
         res = g.inv_intermediate(z[0][0], z[0][1], z[1][0], z[1][1], num_points[i], terminus_idx=0)
-        res_points = [(lon, lat) for lon,lat in zip(res.lons, res.lats)]
+
+        res_points = [(lon, lat) for lon, lat in zip(res.lons, res.lats)]
 
         sim_points.extend(res_points)
+
+    timestamps = [ start_time + timedelta(0, i*temporal_res) for i in range(len(sim_points)) ]
+    sim_points = [ (v[0], v[1], timestamps[i]) for i, v in enumerate(res_points) ]
+    #print(sim_points)
     return sim_points
 
 if(__name__ == "__main__"):
     w = [(10.0, 30.0), (10.1, 30.0)]
-    dists = simpleSimulate(w, 15.0, 1.0)
+    dists = simpleSimulate(w, datetime.now(), 15.0, 1.0)
     print(dists)

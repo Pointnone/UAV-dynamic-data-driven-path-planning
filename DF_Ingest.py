@@ -25,17 +25,19 @@ def downloadDF(DF_USER, DF_PASS):
     host = "ftp3.datafordeler.dk"
     ftp = ftplib.FTP(host, DF_USER, DF_PASS)
     
-    filename = [f for f in ftp.nlst() if "GML" in f][0]
-    
-    if(os.path.exists(filename)):
-        return filename # Terminate early if file already exists
-    
-    with open(filename, "wb") as fd:
-        ftp.retrbinary(f"RETR {filename}", fd.write)
-    
-    ftp.quit()
-    
-    return filename
+    if(len(ftp.nlst()) > 0):
+        filename = [f for f in ftp.nlst() if "GML" in f][0]
+        
+        if(os.path.exists(filename)):
+            return filename # Terminate early if file already exists
+        
+        with open(filename, "wb") as fd:
+            ftp.retrbinary(f"RETR {filename}", fd.write)
+        
+        ftp.quit()
+        
+        return filename
+    return None
 
 def unzip(filename, fileToExtract):
     with ZipFile(Path(f'./{filename}'), 'r') as zipF:
@@ -89,14 +91,15 @@ def buildCityDBRecords(cities, is_sim = False, sim_layer = 0):
 def updateDFData(DF_USER, DF_PASS, engine, meta, dbsm):
     filename = downloadDF(DF_USER, DF_PASS)
     
-    # TODO: Add other sources?
-    unzip(filename, "bebyggelse.gml")
-    cities = extractCityShapes("bebyggelse.gml")
+    if(filename):
+        # TODO: Add other sources?
+        unzip(filename, "bebyggelse.gml")
+        cities = extractCityShapes("bebyggelse.gml")
 
-    with dbsm() as session:
-        DF_Table = Table("df", meta, autoload_with=engine) # Table Reflection
-        session.execute(insert(DF_Table), buildCityDBRecords(cities))
-        session.commit()
+        with dbsm() as session:
+            DF_Table = Table("df", meta, autoload_with=engine) # Table Reflection
+            session.execute(insert(DF_Table), buildCityDBRecords(cities))
+            session.commit()
     
 #if(__name__ == "__main__"):
 #    filename = downloadDF()

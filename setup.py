@@ -9,13 +9,9 @@ from dotenv import load_dotenv
 from pathlib import Path
 import os
 
-import numpy as np
-
 from sqlalchemy import MetaData, create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import URL
-
-from datetime import datetime
 
 from DF_Ingest import *
 from DMI_Ingest import *
