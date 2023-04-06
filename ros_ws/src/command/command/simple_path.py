@@ -21,6 +21,7 @@ def _cost_path(waypoints, path_dat, start_time, zone_greenlist = []):
     transformer = proj.Transformer.from_crs(epsg4326, epsg25832, True)
 
     pos, num_points = ps.simpleSimulate(waypoints, start_time, 15.0, 1.0)
+    pos_nt = [ Point(p[0], p[1]) for p in pos ]
 
     cost_per_pos = np.zeros(len(pos))
     
@@ -79,8 +80,23 @@ def _cost_path(waypoints, path_dat, start_time, zone_greenlist = []):
         cost_per_pos = cost_per_pos + dist_cost
 
     if(path_dat['df']):
-        noop = 0 # TODO: DF has stopped delivering with FTP (Or temporary outage?)
+        cities = [ infs for infs in path_dat['df'] if infs['itype'] == "city" ]
+        #print(cities)
 
+        prepped_cities = [ (c['geom'], c) for c in cities ]
+        for pc in prepped_cities:
+            prepare(pc[0])
+
+        for pc in prepped_cities:
+            pc_violations = contains(pc[0], pos_nt)
+            
+            cost_per_violation = 10.0
+            city_cost = [ (cost_per_violation if pc_violations[i] else 0.0) for i, p in enumerate(pos) ]
+
+            print(city_cost)
+
+            cost_per_pos = cost_per_pos + city_cost
+        
     if(path_dat['zone']):
         notams = path_dat['notam']
 
@@ -91,20 +107,16 @@ def _cost_path(waypoints, path_dat, start_time, zone_greenlist = []):
         zones = path_dat['zone']
         notam_zones = [ n['zname'] for n in notams ]
         activated_zones = [ z for z in zones if (z['zname'] in notam_zones and not z['zname'] in zone_greenlist) ]
-        
-        pos_nt = [ Point(p[0], p[1]) for p in pos ]
 
         # Prepare geometry for better performance
         prepped_zones = [ (z['geom'], z) for z in activated_zones ]
         for pz in prepped_zones:
             prepare(pz[0])
 
-        # Find potential violations per zone
-        violations_by_zone = {}
+        # Find violations per zone
         for pz in prepped_zones:
             zname = pz[1]['zname']
             pz_violations = contains(pz[0], pos_nt)
-            violations_by_zone[zname] = pz_violations
 
             cost_per_violation = 100.0
             zone_cost = [ (cost_per_violation if (pz_violations[i] and (p[2] >= notams_by_zname[zname]['act_from'] and p[2] <= notams_by_zname[zname]['act_to'])) else 0.0 ) for i, p in enumerate(pos) ]

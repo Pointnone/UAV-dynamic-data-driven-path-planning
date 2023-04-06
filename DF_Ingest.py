@@ -90,6 +90,7 @@ def buildCityDBRecords(cities, is_sim = False, sim_layer = 0):
 
 def updateDFData(DF_USER, DF_PASS, engine, meta, dbsm):
     filename = downloadDF(DF_USER, DF_PASS)
+    #filename = "DKstednavneBearbejdedeNohist_GML321_20230205080000.zip" # Manual override in case of no files on DF servers
     
     if(filename):
         # TODO: Add other sources?

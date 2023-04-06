@@ -3,7 +3,7 @@ from DMI_Ingest import *
 from TDC_Ingest import *
 from Naviair_Ingest import *
 
-from ros_ws.src.command.setup import environmentVars, setupDB
+from ros_ws.src.command.command.utils import environmentVars, setupDB
 
 if(__name__ == "__main__"):
     env = environmentVars()
