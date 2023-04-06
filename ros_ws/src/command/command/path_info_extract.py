@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 import pyproj as proj
 from geojson import Polygon
 
-from setup import setupDB, environmentVars
+from utils import setupDB, environmentVars
 
 def waypoint_to_linestring(waypoints):
     return to_wkt(LineString(waypoints))
@@ -28,11 +28,19 @@ def extract_db_data(tables, engine, meta, dbsm, waypoints, radius = 0.25):
                 row['geom'] = shape.to_shape(row['geom'])
             
             ret[table] = res
+
+        if(ret['zone']):
+            N_Table = Table('notam', meta, autoload_with=engine)
+            s = select([N_Table], N_Table.c.zname.in_([z['zname'] for z in ret['zone']]))
+            res = [dict(r) for r in session.execute(s).all()]
+
+            ret['notam'] = res
+
     return ret
     
 if(__name__ == "__main__"):
-    environmentVars()
-    engine, meta, dbsm = setupDB()
+    env = environmentVars()
+    engine, meta, dbsm = setupDB(env['DB_USER'], env['DB_PASS'])
     waypoints = [(9.538999, 55.706185), (9.538999, 54.979835), (12.004298, 54.979835)]
     data = extract_db_data(["df", "dmi", "cell", "zone"], engine, meta, dbsm, waypoints, 0.25)
     print(data)

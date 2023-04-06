@@ -1,5 +1,6 @@
 from pyproj import Geod
 from datetime import datetime, timedelta
+import math
 
 def simpleSimulate(waypoints, start_time = datetime.now(), speed = 15.0, temporal_res = 1.0):
     g = Geod(ellps="WGS84")
@@ -13,7 +14,7 @@ def simpleSimulate(waypoints, start_time = datetime.now(), speed = 15.0, tempora
     term_lats = [z[1][1] for z in zipped_points]
 
     _, _, dists = g.inv(init_lons, init_lats, term_lons, term_lats)
-    num_points = [d/(speed*temporal_res) for d in dists]
+    num_points = [math.ceil(d/(speed*temporal_res)) for d in dists]
     
     for i in range(len(zipped_points)):
         z = zipped_points[i]
@@ -22,13 +23,12 @@ def simpleSimulate(waypoints, start_time = datetime.now(), speed = 15.0, tempora
         res_points = [(lon, lat) for lon, lat in zip(res.lons, res.lats)]
 
         sim_points.extend(res_points)
-
+        
     timestamps = [ start_time + timedelta(0, i*temporal_res) for i in range(len(sim_points)) ]
-    sim_points = [ (v[0], v[1], timestamps[i]) for i, v in enumerate(res_points) ]
-    #print(sim_points)
-    return sim_points
+    sim_points = [ (v[0], v[1], timestamps[i]) for i, v in enumerate(sim_points) ]
+    return sim_points, num_points
 
 if(__name__ == "__main__"):
-    w = [(10.0, 30.0), (10.1, 30.0)]
+    w = [(10.0, 30.0), (10.1, 30.0), (10.1, 30.1)]
     dists = simpleSimulate(w, datetime.now(), 15.0, 1.0)
-    print(dists)
+    #print(dists)

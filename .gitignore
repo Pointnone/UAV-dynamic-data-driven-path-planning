@@ -133,3 +133,8 @@ dmypy.json
 *.zip
 *.gml
 *.csv
+
+# ROS Env
+ros_ws/*
+!ros_ws/src
+#!ros_ws/src/command/*
