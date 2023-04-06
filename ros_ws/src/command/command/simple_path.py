@@ -20,7 +20,10 @@ def _cost_path(waypoints, path_dat, start_time, zone_greenlist = []):
     epsg4326 = proj.CRS.from_epsg(4326)
     transformer = proj.Transformer.from_crs(epsg4326, epsg25832, True)
 
-    pos, num_points = ps.simpleSimulate(waypoints, start_time, 15.0, 1.0)
+    sim_dist = 15.0
+    sim_temp_res = 1.0
+
+    pos, num_points = ps.simpleSimulate(waypoints, start_time, sim_dist, sim_temp_res)
     pos_nt = [ Point(p[0], p[1]) for p in pos ]
 
     cost_per_pos = np.zeros(len(pos))
@@ -51,7 +54,7 @@ def _cost_path(waypoints, path_dat, start_time, zone_greenlist = []):
 
         precips = [ p['precip_meas'] for p in pos_map ]
         windspds = [ p['windspd_meas'] for p in pos_map ]
-        windspds = [ (s if s >= 2.0 else 0.0) for s in windspds ]
+        windspds = [ (s if s >= 5.0 else 0.0) for s in windspds ]
         cost_per_pos = cost_per_pos + precips + windspds
     
     if(path_dat['cell']):
@@ -89,12 +92,8 @@ def _cost_path(waypoints, path_dat, start_time, zone_greenlist = []):
 
         for pc in prepped_cities:
             pc_violations = contains(pc[0], pos_nt)
-            
             cost_per_violation = 10.0
             city_cost = [ (cost_per_violation if pc_violations[i] else 0.0) for i, p in enumerate(pos) ]
-
-            print(city_cost)
-
             cost_per_pos = cost_per_pos + city_cost
         
     if(path_dat['zone']):
@@ -122,7 +121,10 @@ def _cost_path(waypoints, path_dat, start_time, zone_greenlist = []):
             zone_cost = [ (cost_per_violation if (pz_violations[i] and (p[2] >= notams_by_zname[zname]['act_from'] and p[2] <= notams_by_zname[zname]['act_to'])) else 0.0 ) for i, p in enumerate(pos) ]
 
             cost_per_pos = cost_per_pos + zone_cost
-            
+
+    cost_per_pos = cost_per_pos + ((sim_dist*sim_temp_res) / 10)
+    print(len(cost_per_pos))
+
     running = 1 # Start after first after home
     cost_per_waypoint = np.zeros(len(waypoints))
 
@@ -132,8 +134,6 @@ def _cost_path(waypoints, path_dat, start_time, zone_greenlist = []):
         segment = cost_per_pos[start:stop]
         cost_per_waypoint[i+1] = reduce(lambda a,b: a+b, segment)
         running += n
-
-    # TODO: Cost by flight length
 
     total_cost = reduce(lambda a,b: a+b, cost_per_waypoint)
     print(cost_per_waypoint)
