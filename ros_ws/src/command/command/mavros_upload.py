@@ -6,7 +6,12 @@ import mavros_msgs.srv as mv_srv
 
 import math
 
-from pyproj import Geod
+try:
+    from simple_path import *
+    from utils import *
+except ImportError:
+    from .simple_path import *
+    from .utils import *
 
 def convert_to_mavros(waypoints):
     home = waypoints[0]
@@ -40,10 +45,18 @@ def send_mission(waypoints):
     return future.result()
 
 def main(args=None):
+    print(args)
     rclpy.init(args=args)
 
     init()
-    waypoints = [(10.3245895, 55.4718524), (10.3045895, 55.4718524), (10.3145895, 55.4518524)]
+
+    env = environmentVars()
+    print(env)
+    engine, meta, dbsm = setupDB(env['DB_USER'], env['DB_PASS'])
+
+    waypoints = find_path((10.3245895, 55.4718524), (10.3145895, 55.4518524), engine, meta, dbsm)
+
+    #waypoints = [(10.3245895, 55.4718524), (10.3045895, 55.4718524), (10.3145895, 55.4518524)]
     send_mission(waypoints)
 
     mv_node.destroy_node()

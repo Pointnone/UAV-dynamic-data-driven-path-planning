@@ -1,7 +1,11 @@
-
-from utils import setupDB, environmentVars
-import path_info_extract as piex
-import path_sim as ps
+try:
+    from utils import *
+    from path_info_extract import *
+    from path_sim import *
+except ImportError:
+    from .utils import *
+    from .path_info_extract import *
+    from .path_sim import *
 
 from shapely import Point, STRtree, distance, prepare, contains, intersects
 import pyproj as proj
@@ -23,7 +27,7 @@ def _cost_path(waypoints, path_dat, start_time, zone_greenlist = []):
     sim_dist = 15.0
     sim_temp_res = 1.0
 
-    pos, num_points = ps.simpleSimulate(waypoints, start_time, sim_dist, sim_temp_res)
+    pos, num_points = simpleSimulate(waypoints, start_time, sim_dist, sim_temp_res)
     pos_nt = [ Point(p[0], p[1]) for p in pos ]
 
     cost_per_pos = np.zeros(len(pos))
@@ -149,10 +153,12 @@ def _iterate_path(waypoints, path_dat, start_time):
 
 def find_path(home, dest, engine, meta, dbsm):
     wps = [home, dest]
-    path_dat = piex.extract_db_data(tables, engine, meta, dbsm, wps, 0.25)
+    path_dat = extract_db_data(tables, engine, meta, dbsm, wps, 0.25)
 
     path = [(10.3245895, 55.4718524), (10.3145895, 55.2518524), (10.2945895, 55.1518524)]#_init_path(wps)
     path = _iterate_path(path, path_dat, datetime(2023, 4, 3, 12, 00, 00))
+
+    return path
 
 if(__name__ == "__main__"):
     env = environmentVars()

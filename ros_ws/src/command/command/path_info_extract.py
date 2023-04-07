@@ -10,7 +10,10 @@ import xml.etree.ElementTree as ET
 import pyproj as proj
 from geojson import Polygon
 
-from utils import setupDB, environmentVars
+try:
+    from utils import *
+except ImportError:
+    from .utils import *
 
 def waypoint_to_linestring(waypoints):
     return to_wkt(LineString(waypoints))
