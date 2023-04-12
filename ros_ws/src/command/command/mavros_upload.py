@@ -5,13 +5,16 @@ import mavros_msgs.msg as mv_msg
 import mavros_msgs.srv as mv_srv
 
 import math
+import sys
 
 try:
     from simple_path import *
     from utils import *
+    from command_interfaces.srv import *
 except ImportError:
     from .simple_path import *
     from .utils import *
+    from command_interfaces.srv import *
 
 def convert_to_mavros(waypoints):
     home = waypoints[0]
@@ -22,6 +25,10 @@ def convert_to_mavros(waypoints):
     return wps
 
 def init():
+    env = environmentVars()
+    global engine, meta, dbsm
+    engine, meta, dbsm = setupDB(env['DB_USER'], env['DB_PASS'])
+
     global mv_node; mv_node = Node('mavros_upload')
     global wp_clear_client; wp_clear_client = mv_node.create_client(mv_srv.WaypointClear, "mavros/mission/clear")
     global wp_push_client; wp_push_client = mv_node.create_client(mv_srv.WaypointPush, "mavros/mission/push")
@@ -30,6 +37,16 @@ def init():
         mv_node.get_logger().info("mission/clear service not available")
     while not wp_push_client.wait_for_service(timeout_sec=5.0):
         mv_node.get_logger().info("mission/push service not available")
+
+    mv_node.create_service(RequestPath, 'request_path', mission_path_req)
+
+def mission_path_req(node, req, res):
+    home = (req.home[0], req.home[1])
+    dest = (req.dest[0], req.dest[1])
+    find_path(home, dest, engine, meta, dbsm)
+    send_mission(waypoints)
+
+    return res
 
 def send_mission(waypoints):
     wp_clear_req = mv_srv.WaypointClear.Request()
@@ -45,16 +62,10 @@ def send_mission(waypoints):
     return future.result()
 
 def main(args=None):
-    print(args)
     rclpy.init(args=args)
 
     init()
-
-    env = environmentVars()
-    print(env)
-    engine, meta, dbsm = setupDB(env['DB_USER'], env['DB_PASS'])
-
-    waypoints = find_path((10.3245895, 55.4718524), (10.3145895, 55.4518524), engine, meta, dbsm)
+    #waypoints = find_path((10.3245895, 55.4718524), (10.3145895, 55.4518524), engine, meta, dbsm)
 
     #waypoints = [(10.3245895, 55.4718524), (10.3045895, 55.4718524), (10.3145895, 55.4518524)]
     send_mission(waypoints)

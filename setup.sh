@@ -1,6 +1,8 @@
 #!/bin/bash
 export $(grep -v '^#' .env | xargs -d '\n')
 
+ln -s `pwd`/.env ./ros_ws # Symlink .env file to ros_ws for easier use of ros2 run
+
 docker run --name postgres -v `pwd`/init:/docker-entrypoint-initdb.d -e POSTGRES_PASSWORD=$DB_PASSWORD -p 127.0.0.1:5432:5432/tcp -d postgis/postgis:15-3.3-alpine
 
 pip install -r requirements.txt

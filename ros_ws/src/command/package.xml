@@ -7,6 +7,9 @@
   <maintainer email="christian@melsen.info">point</maintainer>
   <license>TODO: License declaration</license>
 
+  <build_depend>command_interfaces</build_depend>
+  <exec_depend>command_interfaces</exec_depend>
+
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>

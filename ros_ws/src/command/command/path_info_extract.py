@@ -18,12 +18,16 @@ except ImportError:
 def waypoint_to_linestring(waypoints):
     return to_wkt(LineString(waypoints))
 
-def extract_db_data(tables, engine, meta, dbsm, waypoints, radius = 0.25):
+def extract_db_data(tables, engine, meta, dbsm, waypoints, radius = 0.25, geometry = None):
     ret = {}
     with dbsm() as session:
         for table in tables:
             C_Table = Table(table, meta, autoload_with=engine)
-            c = func.ST_Buffer(waypoint_to_linestring(waypoints), radius, 'endcap=round join=round')
+            c = None
+            if(geometry == None):
+                c = func.ST_Buffer(waypoint_to_linestring(waypoints), radius, 'endcap=round join=round')
+            else:
+                c = to_wkt(geometry)
             s = select([C_Table], C_Table.c.geom.ST_Intersects(c))
             res = [dict(r) for r in session.execute(s).all()]
 

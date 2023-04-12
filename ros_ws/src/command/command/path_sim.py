@@ -18,7 +18,7 @@ def simpleSimulate(waypoints, start_time = datetime.now(), speed = 15.0, tempora
     
     for i in range(len(zipped_points)):
         z = zipped_points[i]
-        res = g.inv_intermediate(z[0][0], z[0][1], z[1][0], z[1][1], num_points[i], terminus_idx=0)
+        res = g.inv_intermediate(z[0][0], z[0][1], z[1][0], z[1][1], num_points[i]+1, terminus_idx=0)
 
         res_points = [(lon, lat) for lon, lat in zip(res.lons, res.lats)]
 
