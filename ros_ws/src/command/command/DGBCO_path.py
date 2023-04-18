@@ -9,11 +9,12 @@ except ImportError:
     from .path_sim import *
     from .simple_path import _cost_path, Cost_Analyser
 
-from shapely import Point, LineString, STRtree, distance, prepare, contains, intersects, envelope, buffer, box
+from shapely import Point, LineString, STRtree, distance, prepare, contains, intersects, envelope, buffer, box, to_geojson
 import pyproj as proj
 from datetime import datetime
 from functools import reduce
 import numpy as np
+import time
 
 import random as rnd
 
@@ -76,6 +77,7 @@ class DGBCO_Particle:
                 r3 = np.random.rand(len(vector)) * 2
 
                 D = r3 * (best_vector - vector)
+                #print(f'Exploit Move D: {D}')
                 vector = vector + D
             else:
                 # Search around best
@@ -84,8 +86,10 @@ class DGBCO_Particle:
 
                 k = 2 - ((2*iter**2)/max_iter**2)
                 k_vect = [ k for i in range(len(vector)) ]
+                #print(k_vect)
 
                 D = best_vector * (k_vect - r4)
+                #print(f'Exploit Search D: {D}')
                 vector = vector + D * (r5 - 1)
 
         # Amend solution to within bounds
@@ -127,12 +131,12 @@ def _init_path(waypoints):
     #waypoints = [(lon, lat) for lon, lat in zip(waypoints.lons, waypoints.lats)]
     return waypoints
 
-def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 100):
+def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 200, particle_count = 44):
     # DGBCO
     #print(bbox)
     #bbox = bbox.coords
     #bounds = [bbox[0], bbox[2]]
-    particles = [ DGBCO_Particle(waypoints, 5, bounds) for i in range(10) ]
+    particles = [ DGBCO_Particle(waypoints, 5, bounds) for i in range(particle_count) ]
     #particles_exploitation = [ DGBCO_Particle(waypoints) for i in range(30) ]
 
     #particles = particles_exploration + particles_exploitation
@@ -144,8 +148,10 @@ def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 100):
 
     perc_exploration = 0.7
 
+    iters_without_improvement = 0
+
     for iter in range(max_iter):
-        print(f"Doing iteration {iter+1} of {max_iter}")
+        #print(f"Doing iteration {iter+1} of {max_iter}")
         costs = np.array([ p.cost(path_dat, start_time) for p in particles ])
         idx_min = costs.argmin()
         min_cost = costs[idx_min]
@@ -157,11 +163,16 @@ def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 100):
         # idx_min = idx_min_e1 if e1_min_cost < e2_min_cost else idx_min_e2
         # min_in_e1 = e1_min_cost < e2_min_cost
 
-        # TODO: Float comparison problem (Temp fix: Added + 1.0)
         if(best_cost > min_cost):
-            print(f'Found new best: {min_cost}')
+            #print(f'Found new best: {min_cost}')
             best_path = particles[idx_min].get_path()
             best_cost = min_cost
+            iters_without_improvement = 0
+        iters_without_improvement += 1
+
+        if(iters_without_improvement > 25):
+            print(f'Found no better solution for 25 iterations at iteration {iter+1}. Terminating now!')
+            break
 
         k = 2 - (2*iter)/max_iter
 
@@ -169,12 +180,12 @@ def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 100):
         if(k < rnd.random() * 2): # Lean towards exploitation towards the end of search
             #print("Adding more exploitation particles")
             perc_exploration = perc_exploration - (perc_exploration) * rnd.random() * 0.12
-            print(f"perc_exploration is now: {perc_exploration}")
+            #print(f"perc_exploration is now: {perc_exploration}")
 
         if(min_cost >= prev1_cost and costs[idx_min] >= prev2_cost):
             #print("Adding more exploration particles")
             perc_exploration = perc_exploration + (1 - perc_exploration) * rnd.random() * 0.06
-            print(f"perc_exploration is now: {perc_exploration}")
+            #print(f"perc_exploration is now: {perc_exploration}")
             # for i in range(3):
             #     if(len(particles_exploitation) >= 1):
             #         particles_exploration.insert(0, particles_exploitation.pop(0)) # Pop one exploitation into exploration
@@ -196,10 +207,10 @@ def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 100):
         rnd.shuffle(particles)
         #print(particles)
         
-    print(best_path)
-    print(best_cost)
+    #print(best_path)
+    #print(best_cost)
 
-    print(to_wkt(LineString(best_path)))
+    print(to_geojson(LineString(best_path)))
 
     return best_path, best_cost
 
@@ -217,11 +228,16 @@ def find_path(home, dest, engine, meta, dbsm):
 
     #path = [(10.3245895, 55.4718524), (10.3145895, 55.2518524), (10.2945895, 55.1518524)]
     path = _init_path(wps)
-    path = _iterate_path(path, path_dat, datetime(2023, 4, 3, 12, 00, 00), bounds)
+    path, cost = _iterate_path(path, path_dat, datetime(2023, 4, 3, 12, 00, 00), bounds)
 
-    return path
+    return path, cost
 
 if(__name__ == "__main__"):
     env = environmentVars()
     engine, meta, dbsm = setupDB(env['DB_USER'], env['DB_PASS'])
-    find_path((10.3245895, 55.4718524), (10.3145895, 55.2518524), engine, meta, dbsm)
+
+    for i in range(10):
+        start = time.time()
+        path, cost = find_path((10.3245895, 55.4718524), (10.3145895, 55.2518524), engine, meta, dbsm)
+        end = time.time()
+        print(f'Cost: {cost} - Elapsed time: {end-start}')
