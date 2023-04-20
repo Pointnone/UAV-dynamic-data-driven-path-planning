@@ -2,12 +2,12 @@ try:
     from utils import *
     from path_info_extract import *
     from path_sim import *
-    from simple_path import _cost_path, Cost_Analyser
+    from simple_path import Cost_Analyser
 except ImportError:
     from .utils import *
     from .path_info_extract import *
     from .path_sim import *
-    from .simple_path import _cost_path, Cost_Analyser
+    from .simple_path import Cost_Analyser
 
 from shapely import Point, LineString, STRtree, distance, prepare, contains, intersects, envelope, buffer, box, to_geojson
 import pyproj as proj
@@ -127,13 +127,13 @@ def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 200, parti
     iters_without_improvement = 0
 
     for iter in range(max_iter):
-        #print(f"Doing iteration {iter+1} of {max_iter}")
+        print(f"Doing iteration {iter+1} of {max_iter}")
         costs = np.array([ a.cost(path_dat, start_time) for a in agents ])
         idx_min = costs.argmin()
         min_cost = costs[idx_min]
 
         if(best_cost > min_cost):
-            #print(f'Found new best: {min_cost}')
+            print(f'Found new best: {min_cost}')
             best_path = agents[idx_min].get_path()
             best_cost = min_cost
             iters_without_improvement = 0
