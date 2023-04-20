@@ -12,9 +12,6 @@ import pyproj as proj
 from datetime import datetime
 from functools import reduce
 import numpy as np
-import time
-
-from multiprocessing.dummy import Pool as ThreadPool
 
 tables = ["df", "dmi", "cell", "zone"]
 DMI_TS_FORMAT = "%Y-%m-%dT%H%M%S"
@@ -25,11 +22,6 @@ def _init_path(waypoints):
 class Cost_Analyser():
     def __init__(self, path_dat, zone_greenlist):
         self.prepare_dat(path_dat, zone_greenlist)
-        self.pool = ThreadPool(8)
-
-        epsg25832 = proj.CRS.from_epsg(25832)
-        epsg4326 = proj.CRS.from_epsg(4326)
-        self.transformer = proj.Transformer.from_crs(epsg4326, epsg25832, True)
 
     def prepare_dat(self, path_dat, zone_greenlist):
         if("dmi" in path_dat):
@@ -80,128 +72,72 @@ class Cost_Analyser():
             for pz in self.prepped_zones:
                 prepare(pz[0])
 
-    def dmi_cost(self, p):
-        # Find shortest time
-        dt_delta = [ abs(p[2] - dt) for dt in self.dmi_dts ]
-        min_idx = np.argmin(dt_delta)
-        #min_dt = min(self.dmi_dts, key=lambda t: abs(p[2] - t))
-        dmi = self.dmi[min_idx]
-
-        # Find shortest point to point
-        nearest_idx = dmi['stree'].nearest(Point(p[0], p[1]))
-        nearest = dmi['points'][nearest_idx]
-
-        precip = nearest['precip_meas']
-        windspd = nearest['windspd_meas']
-        windspd = (windspd if windspd >= 5.0 else 0.0)
-
-        return precip + windspd
-    
-    def coord_convert(self, lon, lat):
-        return Point(self.transformer.transform(lon,lat))
-
-    def point_convert(self, point):
-        return Point(self.transformer.transform(list(point['geom'].coords)[0][0], list(point['geom'].coords)[0][1]))
-
-    def cell_cost(self, p):
-        nearest_idx = self.cell_stree.nearest(Point(p[0], p[1]))
-        nearest_cell = self.cell_dat[nearest_idx]
-            
-        # Convert to EPSG:25832 to measure in meters
-        # Using distance even though it degenerates to Euclidean distance
-        dist_to_nearest = distance(self.coord_convert(p[0], p[1]), self.point_convert(nearest_cell))
-
-        # Calc cost based on min and max distances
-        # TODO: Consider basing this on technology type as well
-        min_dist = 100.0
-        max_dist = 3000.0
-        dist_cost_func = lambda d : 0.0 if d >= min_dist and d <= max_dist else (((d-max_dist)*0.003)**2 if d > max_dist else ((d-min_dist)*0.02)**10)
-        dist_cost = dist_cost_func(dist_to_nearest)
-        return dist_cost
-    
-    def infrastructure_cost(self, pc):
-        pc_violations = contains(pc[0], self.pos_nt)
-        cost_per_violation = 10.0
-        city_cost = [ (cost_per_violation if pc_violations[i] else 0.0) for i in range(len(self.pos_nt)) ]
-        return city_cost
-    
-    def zone_cost(self, p):
-        p_zone_cost = 0.0
-        for pz in self.prepped_zones:
-            zname = pz[1]['zname']
-            pz_violations = contains(pz[0], Point(p[0], p[1]))
-
-            cost_per_violation = 100.0
-            p_zone_cost = p_zone_cost + (cost_per_violation if (pz_violations and (p[2] >= self.notams_by_zname[zname]['act_from'] and p[2] <= self.notams_by_zname[zname]['act_to'])) else 0.0 )
-        return p_zone_cost
-
     def analyse_cost(self, waypoints, start_time, sim_dist = 15.0, sim_temp_res = 1.0):
+        epsg25832 = proj.CRS.from_epsg(25832)
+        epsg4326 = proj.CRS.from_epsg(4326)
+        transformer = proj.Transformer.from_crs(epsg4326, epsg25832, True)
+
         pos, num_points = simpleSimulate(waypoints, start_time, sim_dist, sim_temp_res)
-        self.pos_nt = [ Point(p[0], p[1]) for p in pos ]
+        pos_nt = [ Point(p[0], p[1]) for p in pos ]
 
         #print(f'Length of pos: {len(pos)}')
 
         cost_per_pos = np.zeros(len(pos))
 
         if(hasattr(self, "dmi")):
-            pos_costs = self.pool.map(self.dmi_cost, pos)
-
-            #for p in pos:
+            pos_map = []
+            for p in pos:
                 # Find shortest time
-            #    dt_delta = [ abs(p[2] - dt) for dt in self.dmi_dts ]
-            #    min_idx = np.argmin(dt_delta)
+                dt_delta = [ abs(p[2] - dt) for dt in self.dmi_dts ]
+                min_idx = np.argmin(dt_delta)
                 #min_dt = min(self.dmi_dts, key=lambda t: abs(p[2] - t))
-            #    dmi = self.dmi[min_idx]
+                dmi = self.dmi[min_idx]
 
                 # Find shortest point to point
-            #    nearest_idx = dmi['stree'].nearest(Point(p[0], p[1]))
-            #    pos_map.append(dmi['points'][nearest_idx]) # Snap positions to nearest position from DMI
-            #print(pos_costs)
-            cost_per_pos = cost_per_pos + pos_costs
+                nearest_idx = dmi['stree'].nearest(Point(p[0], p[1]))
+                pos_map.append(dmi['points'][nearest_idx]) # Snap positions to nearest position from DMI
+
+            precips = [ p['precip_meas'] for p in pos_map ]
+            windspds = [ p['windspd_meas'] for p in pos_map ]
+            windspds = [ (s if s >= 5.0 else 0.0) for s in windspds ]
+            cost_per_pos = cost_per_pos + precips + windspds
 
         if(hasattr(self, "cell_stree")):
-            cell_costs = self.pool.map(self.cell_cost, pos)
-            #for p in pos:
-            #    nearest_idx = self.cell_stree.nearest(Point(p[0], p[1]))
-            #    pos_map.append(self.cell_dat[nearest_idx])
-
+            pos_map = []
+            for p in pos:
+                nearest_idx = self.cell_stree.nearest(Point(p[0], p[1]))
+                pos_map.append(self.cell_dat[nearest_idx])
+            
             # Convert to EPSG:25832 to measure in meters
-            #coord_convert = lambda lon,lat : Point(transformer.transform(lon,lat))
-            #point_convert = lambda point : Point(transformer.transform(list(point['geom'].coords)[0][0], list(point['geom'].coords)[0][1]))
+            coord_convert = lambda lon,lat : Point(transformer.transform(lon,lat))
+            point_convert = lambda point : Point(transformer.transform(list(point['geom'].coords)[0][0], list(point['geom'].coords)[0][1]))
             # Using distance even though it degenerates to Euclidean distance
-            #dists_to_nearest = [ distance(coord_convert(p[0], p[1]), point_convert(cell)) for p, cell in zip(pos, pos_map) ]
+            dists_to_nearest = [ distance(coord_convert(p[0], p[1]), point_convert(cell)) for p, cell in zip(pos, pos_map) ]
 
             # Calc cost based on min and max distances
             # TODO: Consider basing this on technology type as well
-            #min_dist = 100.0
-            #max_dist = 3000.0
-            #dist_cost_func = lambda d : 0.0 if d >= min_dist and d <= max_dist else (((d-max_dist)*0.003)**2 if d > max_dist else ((d-min_dist)*0.02)**10)
-            #dist_cost = [ dist_cost_func(d) for d in dists_to_nearest ]
-            cost_per_pos = cost_per_pos + cell_costs
+            min_dist = 100.0
+            max_dist = 3000.0
+            dist_cost_func = lambda d : 0.0 if d >= min_dist and d <= max_dist else (((d-max_dist)*0.003)**2 if d > max_dist else ((d-min_dist)*0.02)**10)
+            dist_cost = [ dist_cost_func(d) for d in dists_to_nearest ]
+            cost_per_pos = cost_per_pos + dist_cost
 
         if(hasattr(self, "prepped_cities")):
-            pc_map = self.pool.map(self.infrastructure_cost, self.prepped_cities)
-
-            pc_cost = np.array(pc_map).sum(0).tolist()
-            #print(len(pc_cost))
-            #print(pc_map)
-            #print(len(pc_map))
-            #print(len(pc_map[0]))
-            #print(len(pos))
-            #pc_map_costs = [  ]
-            cost_per_pos = cost_per_pos + pc_cost
+            for pc in self.prepped_cities:
+                pc_violations = contains(pc[0], pos_nt)
+                cost_per_violation = 10.0
+                city_cost = [ (cost_per_violation if pc_violations[i] else 0.0) for i, p in enumerate(pos) ]
+                cost_per_pos = cost_per_pos + city_cost
         
         if(hasattr(self, "prepped_zones")):
-            pz_map = self.pool.map(self.zone_cost, pos)
+            for pz in self.prepped_zones:
+                zname = pz[1]['zname']
+                pz_violations = contains(pz[0], pos_nt)
 
-            #for pz in self.prepped_zones:
-            #    zname = pz[1]['zname']
-            #    pz_violations = contains(pz[0], pos_nt)
+                cost_per_violation = 100.0
+                zone_cost = [ (cost_per_violation if (pz_violations[i] and (p[2] >= self.notams_by_zname[zname]['act_from'] and p[2] <= self.notams_by_zname[zname]['act_to'])) else 0.0 ) for i, p in enumerate(pos) ]
 
-            #    cost_per_violation = 100.0
-            #    zone_cost = [ (cost_per_violation if (pz_violations[i] and (p[2] >= self.notams_by_zname[zname]['act_from'] and p[2] <= self.notams_by_zname[zname]['act_to'])) else 0.0 ) for i, p in enumerate(pos) ]
-
-            cost_per_pos = cost_per_pos + pz_map
+                cost_per_pos = cost_per_pos + zone_cost
 
         cost_per_pos = cost_per_pos + ((sim_dist*sim_temp_res) / 10)
         #print(len(cost_per_pos))
@@ -225,28 +161,24 @@ class Cost_Analyser():
 
         return total_cost, cost_per_waypoint        
 
-def _iterate_path(waypoints, path_dat, start_time):
+#def _iterate_path(waypoints, path_dat, start_time):
     # Normally a loop here
-    ca = Cost_Analyser(path_dat, [])
-    start = time.time()
-    cost = ca.analyse_cost(waypoints, start_time)
-    end = time.time()
-    print(f'Cost: {cost} - Elapsed time: {end-start}')
+#    cost = _cost_path(waypoints, path_dat, start_time)
 
-    return waypoints
+#    return waypoints
 
-def find_path(home, dest, engine, meta, dbsm):
-    wps = [home, dest]
-    path_dat = extract_db_data(tables, engine, meta, dbsm, wps, 0.25)
+#def find_path(home, dest, engine, meta, dbsm):
+#    wps = [home, dest]
+#    path_dat = extract_db_data(tables, engine, meta, dbsm, wps, 0.25)
 
     #path = [(10.3245895, 55.4718524), (10.3145895, 55.2518524), (10.2945895, 55.1518524)]
-    path = _init_path(wps)
-    path = _iterate_path(path, path_dat, datetime(2023, 4, 3, 12, 00, 00))
+#    path = _init_path(wps)
+#    path = _iterate_path(path, path_dat, datetime(2023, 4, 3, 12, 00, 00))
 
-    return path
+#    return path
 
 if(__name__ == "__main__"):
     env = environmentVars()
     engine, meta, dbsm = setupDB(env['DB_USER'], env['DB_PASS'])
-    find_path((10.3245895, 55.4718524), (10.3145895, 55.2518524), engine, meta, dbsm)
+    #find_path((10.3245895, 55.4718524), (10.3145895, 55.2518524), engine, meta, dbsm)
     
