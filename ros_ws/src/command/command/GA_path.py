@@ -16,9 +16,11 @@ from functools import reduce
 import numpy as np
 import time
 
+from multiprocessing import Pool
+
 import random as rnd
 
-tables = ["df", "cell", "zone"] # ["df", "dmi", "cell", "zone"]
+tables = ["cell"] # ["df", "cell", "zone"] # ["df", "dmi", "cell", "zone"]
 g = Geod(ellps="WGS84")
 
 discrete_recombination = False;
@@ -27,40 +29,41 @@ allele_mutate_rate = 0.25
 perc_small_vs_global_mutation = 0.75
 small_perc_change_vs_bound_size = 0.01
 
+lerp_init_wps = True
+
 # Steady-state-selection
 top_perc_recombine = 0.1
 bot_perc_drop = 0.3
 
+def cost(a, force=False):
+        if(not a.cost_calculated or force):
+            waypoints = a.get_path()
+
+            a.total_cost, a.cost_per_waypoint = a.cost_analyser.analyse_cost(waypoints, a.start_time)
+            a.cost_calculated = True
+        return a.total_cost
+
 class GA_Agent:
-    def __init__(self, wps = [], num_ctr_points = 5, bounds = [0.0, 0.0, 0.0, 0.0]):
+    def __init__(self, wps = [], num_ctr_points = 5, bounds = [0.0, 0.0, 0.0, 0.0], path_dat = None, start_time = None):
         self.home = wps[0]
         self.dest = wps[-1]
         self.bounds = bounds
         self.small_ranges = [(bounds[2]-bounds[0])*small_perc_change_vs_bound_size, (bounds[3]-bounds[1])*small_perc_change_vs_bound_size]
 
         self.cost_calculated = False
+        self.cost_analyser = Cost_Analyser(path_dat, [])
+        self.start_time = start_time
 
         if(len(wps) <= 2): # If only home and dest
             self.wps = [ [rnd.uniform(bounds[0], bounds[2]), rnd.uniform(bounds[1], bounds[3])] for i in range(num_ctr_points) ]
         else:
-            self.wps = wps
+            self.wps = wps[1:-1]
 
     def get_path(self):
         waypoints = [self.home]
         waypoints.extend(self.wps)
         waypoints.extend([self.dest])
         return waypoints
-
-    def cost(self, path_dat, start_time, force=False):
-        if(not self.cost_calculated or force):
-            if(not hasattr(self, "cost_analyser")):
-                self.cost_analyser = Cost_Analyser(path_dat, [])
-
-            waypoints = self.get_path()
-
-            self.total_cost, self.cost_per_waypoint = self.cost_analyser.analyse_cost(waypoints, start_time)
-            self.cost_calculated = True
-        return self.total_cost
     
     def get_alleles(self): # Returns waypoints as a flattened list
         return np.array(self.wps).flatten()
@@ -119,16 +122,30 @@ def _random_between_except(a, b, c):
     return rnd.sample(lst, 1)[0]
 
 def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 200, particles = 100):
-    agents = [ GA_Agent(waypoints, 5, bounds) for i in range(particles) ]
+    if(lerp_init_wps):
+        home = waypoints[0]
+        dest = waypoints[1]
+        res = g.inv_intermediate(home[0], home[1], dest[0], dest[1], 5 + 2, initial_idx = 0, terminus_idx = 0)
+        waypoints = [(lon, lat) for lon, lat in zip(res.lons, res.lats)]
+
+    #jiggle_points
+    #print(waypoints)
+    agents = [ GA_Agent(waypoints, 5, bounds, path_dat, start_time) for i in range(particles) ]
 
     best_cost = float("inf")
     best_path = []
 
+    #pool = Pool(processes=8)
+
     iters_without_improvement = 0
 
     for iter in range(max_iter):
+        iter_start = time.time()
         print(f"Doing iteration {iter+1} of {max_iter}")
-        costs = np.array([ a.cost(path_dat, start_time) for a in agents ])
+        #costs = np.array(pool.map(cost, agents))
+        cost_start = time.time()
+        costs = np.array([ cost(a) for a in agents ])
+        cost_end = time.time()
         idx_min = costs.argmin()
         min_cost = costs[idx_min]
 
@@ -149,13 +166,13 @@ def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 200, parti
         sorted_agents = sorted_agents[0:round(len(idxs_sorted_asc)*(1-bot_perc_drop))]
         
         # Top % always recombine
-        new_agents = [ _recombine_parents(sorted_agents[i], sorted_agents[_random_between_except(0,len(sorted_agents),i)]) for i in range(round(particles*top_perc_recombine)) ] 
+        new_agents = [ _recombine_parents(sorted_agents[i], sorted_agents[_random_between_except(0,len(sorted_agents),i)], path_dat, start_time) for i in range(round(particles*top_perc_recombine)) ] 
 
         # Others recombine
         while(len(sorted_agents) + len(new_agents) < particles):
             idx_a = rnd.randint(0, len(sorted_agents)-1)
             idx_b = _random_between_except(0, len(sorted_agents), idx_a)
-            new_agents.extend( [_recombine_parents(sorted_agents[idx_a], sorted_agents[idx_b])] )
+            new_agents.extend( [_recombine_parents(sorted_agents[idx_a], sorted_agents[idx_b], path_dat, start_time)] )
 
         sorted_agents.extend(new_agents)
 
@@ -165,11 +182,13 @@ def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 200, parti
                 sorted_agents[i].mutate()
         
         agents = sorted_agents
+        iter_end = time.time()
+        print(f'Cost took: {(cost_end-cost_start)/(iter_end-iter_start)} of the cycle')
 
     print(to_geojson(LineString(best_path)))
     return best_path, best_cost
 
-def _recombine_parents(parent_a = None, parent_b = None):
+def _recombine_parents(parent_a = None, parent_b = None, path_dat = None, start_time = None):
     if(parent_a == None or parent_b == None):
         return None
     alleles_a = parent_a.get_alleles()
@@ -193,7 +212,7 @@ def _recombine_parents(parent_a = None, parent_b = None):
     alleles_c = np.array(alleles_c)
     waypoints = alleles_c.reshape((-1, 2)).tolist()
 
-    new_agent = GA_Agent(waypoints, bounds=bounds)
+    new_agent = GA_Agent(waypoints, 5, bounds, path_dat, start_time)
     new_agent.home = parent_a.home; new_agent.dest = parent_a.dest # Keep extremes intact
     return new_agent
 
