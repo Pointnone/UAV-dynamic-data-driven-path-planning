@@ -36,7 +36,7 @@ def extract_db_data(tables, engine, meta, dbsm, waypoints, radius = 0.25, geomet
             
             ret[table] = res
 
-        if(ret['zone']):
+        if("zone" in ret):
             N_Table = Table('notam', meta, autoload_with=engine)
             s = select([N_Table], N_Table.c.zname.in_([z['zname'] for z in ret['zone']]))
             res = [dict(r) for r in session.execute(s).all()]
