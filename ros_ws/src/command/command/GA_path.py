@@ -23,13 +23,13 @@ import random as rnd
 tables = ["cell"] # ["df", "cell", "zone"] # ["df", "dmi", "cell", "zone"]
 g = Geod(ellps="WGS84")
 
-discrete_recombination = False;
+discrete_recombination = False
 mutate_rate = 0.2
 allele_mutate_rate = 0.25
 perc_small_vs_global_mutation = 0.75
 small_perc_change_vs_bound_size = 0.01
 
-lerp_init_wps = True
+lerp_init_wps = False
 
 # Steady-state-selection
 top_perc_recombine = 0.1
@@ -140,17 +140,14 @@ def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 200, parti
     iters_without_improvement = 0
 
     for iter in range(max_iter):
-        iter_start = time.time()
-        print(f"Doing iteration {iter+1} of {max_iter}")
+        #print(f"Doing iteration {iter+1} of {max_iter}")
         #costs = np.array(pool.map(cost, agents))
-        cost_start = time.time()
         costs = np.array([ cost(a) for a in agents ])
-        cost_end = time.time()
         idx_min = costs.argmin()
         min_cost = costs[idx_min]
 
         if(best_cost > min_cost):
-            print(f'Found new best: {min_cost}')
+            #print(f'Found new best: {min_cost}')
             best_path = agents[idx_min].get_path()
             best_cost = min_cost
             iters_without_improvement = 0
@@ -182,10 +179,9 @@ def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 200, parti
                 sorted_agents[i].mutate()
         
         agents = sorted_agents
-        iter_end = time.time()
-        print(f'Cost took: {(cost_end-cost_start)/(iter_end-iter_start)} of the cycle')
+        #print(f'Cost took: {(cost_end-cost_start)/(iter_end-iter_start)} of the cycle')
 
-    print(to_geojson(LineString(best_path)))
+    #print(to_geojson(LineString(best_path)))
     return best_path, best_cost
 
 def _recombine_parents(parent_a = None, parent_b = None, path_dat = None, start_time = None):
@@ -212,7 +208,11 @@ def _recombine_parents(parent_a = None, parent_b = None, path_dat = None, start_
     alleles_c = np.array(alleles_c)
     waypoints = alleles_c.reshape((-1, 2)).tolist()
 
-    new_agent = GA_Agent(waypoints, 5, bounds, path_dat, start_time)
+    wps = [parent_a.home]
+    wps.extend(waypoints)
+    wps.extend([parent_a.dest])
+
+    new_agent = GA_Agent(wps, 5, bounds, path_dat, start_time)
     new_agent.home = parent_a.home; new_agent.dest = parent_a.dest # Keep extremes intact
     return new_agent
 
@@ -230,7 +230,7 @@ def find_path(home, dest, engine, meta, dbsm):
 
     #path = [(10.3245895, 55.4718524), (10.3145895, 55.2518524), (10.2945895, 55.1518524)]
     path = _init_path(wps)
-    path, cost = _iterate_path(path, path_dat, datetime(2023, 4, 3, 12, 00, 00), bounds)
+    path, cost = _iterate_path(path, path_dat, datetime(2023, 4, 26, 20, 00, 00), bounds)
 
     #print(path)
     return path, cost
@@ -241,6 +241,8 @@ if(__name__ == "__main__"):
 
     for i in range(10):
         start = time.time()
-        path, cost = find_path((10.3245895, 55.4718524), (10.3145895, 55.2518524), engine, meta, dbsm)
+        path, path_cost = find_path((10.3245895, 55.4718524), (10.3145895, 55.2518524), engine, meta, dbsm)
         end = time.time()
-        print(f'Cost: {cost} - Elapsed time: {end-start}')
+        print(f'Cost: {path_cost} - Elapsed time: {end-start}')
+        print(to_geojson(LineString(path)))
+        print("-----")
