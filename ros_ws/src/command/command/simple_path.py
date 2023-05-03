@@ -125,7 +125,7 @@ class Cost_Analyser():
         if(hasattr(self, "prepped_cities")):
             for pc in self.prepped_cities:
                 pc_violations = contains(pc[0], pos_nt)
-                cost_per_violation = 10.0
+                cost_per_violation = 100.0
                 city_cost = [ (cost_per_violation if pc_violations[i] else 0.0) for i, p in enumerate(pos) ]
                 cost_per_pos = cost_per_pos + city_cost
         
@@ -134,12 +134,12 @@ class Cost_Analyser():
                 zname = pz[1]['zname']
                 pz_violations = contains(pz[0], pos_nt)
 
-                cost_per_violation = 100.0
+                cost_per_violation = 1000.0
                 zone_cost = [ (cost_per_violation if (pz_violations[i] and (p[2] >= self.notams_by_zname[zname]['act_from'] and p[2] <= self.notams_by_zname[zname]['act_to'])) else 0.0 ) for i, p in enumerate(pos) ]
 
                 cost_per_pos = cost_per_pos + zone_cost
 
-        cost_per_pos = cost_per_pos + ((sim_dist*sim_temp_res) / 10)
+        cost_per_pos = cost_per_pos + ((sim_dist*sim_temp_res) / 100)
         #print(len(cost_per_pos))
 
         running = 1 # Start after first after home
