@@ -9,9 +9,12 @@ import os
 
 import requests
 
-from sqlalchemy import Table, Column, Float, Integer, String, MetaData, create_engine, insert
+from sqlalchemy import Table, delete
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import URL
+
+from geoalchemy2 import Geometry, shape
 
 import xml.etree.ElementTree as ET
 
@@ -23,11 +26,9 @@ def buildPostGISSimplePoly(poly):
     poly_wrap = lambda p : f'({(", ").join([coord_wrap(c) for c in p])})'
 
     if(poly["type"] == "MultiPolygon"):
-        poly_str = f'POLYGON({(",").join([poly_wrap(polygon) for polygon in poly["coordinates"][0]])})'
+        poly_str = f'POLYGON({(",").join([poly_wrap(polygon) for polygon in poly["coordinates"][0]])})' # TODO: Handle Multipolygons correctly
     elif(poly["type"] == "Polygon"):
         poly_str = f'POLYGON({(",").join([poly_wrap(polygon) for polygon in poly["coordinates"]])})'
-
-    print(poly_str)
 
     return poly_str
 
@@ -82,7 +83,18 @@ def updateNaviairData(NAVIAIR_API_KEY, engine, meta, dbsm):
 
     with dbsm() as session:
             Zone_Table = Table("zone", meta, autoload_with=engine) # Table Reflection
-            session.execute(insert(Zone_Table), buildZoneDBRecords(feat_list))
+
+            # Upsert
+            s = insert(Zone_Table)
+            s = s.on_conflict_do_update(
+                index_elements=[Zone_Table.c.zname], set_=dict(s.excluded.items())
+            )
+
+            session.execute(s, buildZoneDBRecords(feat_list))
             Notam_Table = Table("notam", meta, autoload_with=engine) # Table Reflection
+
+            # Drop old information and replace
+            session.execute(delete(Notam_Table))
+
             session.execute(insert(Notam_Table), buildNotamDBRecords(feat_list))
             session.commit()

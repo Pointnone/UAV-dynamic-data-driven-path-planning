@@ -8,20 +8,23 @@ Created on Thu Feb  2 16:21:13 2023
 from dotenv import load_dotenv
 from pathlib import Path
 import os
+import glob
 
 import requests
 
 import pygrib
 
-from sqlalchemy import Table, Column, Float, Integer, String, MetaData, create_engine, insert
+from sqlalchemy import Table, delete
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import URL
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import numpy as np
 
 DMI_TS_FORMAT = "%Y-%m-%dT%H%M%S"
+PG_TS_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 def findLatest(DMI_API_KEY):
     url = 'https://dmigw.govcloud.dk/v1/forecastdata/collections/harmonie_nea_sf/items'
@@ -90,22 +93,37 @@ def buildDBRecords(data, dts, is_sim = False, sim_layer = 0):
 global DMI_idxs
 DMI_idxs = [
     {'idx': 42, 'mtype': 'precip'},
-    {'idx': 87, 'mtype': 'winddir'},
-    {'idx': 88, 'mtype': 'windspd'}
+    {'idx': 86, 'mtype': 'winddir'},
+    {'idx': 87, 'mtype': 'windspd'}
 ]
 
 def updateDMIData(DMI_API_KEY, engine, meta, dbsm):
     last, all_of_last_mr = findLatest(DMI_API_KEY)
     print(f'Getting {len(all_of_last_mr)} records')
     #all_of_last_mr = ["https://dmigw.govcloud.dk/v1/forecastdata/download/HARMONIE_NEA_SF_2023-03-27T060000Z_2023-03-27T060000Z.grib"]
+
+    # Delete old records
+    with dbsm() as session:
+        DMI_Table = Table("dmi", meta, autoload_with=engine)
+
+        # TODO: Base on latest_mr instead
+        s = delete(DMI_Table).where(DMI_Table.c.dt < datetime.strftime(datetime.now() + timedelta(hours=1), PG_TS_FORMAT))
+        session.execute(s)
+        session.commit()
+
     for href in all_of_last_mr:
         #print(href)
         grib_file = getGribFile(href, DMI_API_KEY)
 
-        grbs = pygrib.open(f"./{grib_file}")
+        grbs = pygrib.open(grib_file)
+        #for grb in grbs:
+        #    print(grb)
 
+        #print(grib_file) # -> HARMONIE_NEA_SF_2023-03-27T060000Z_2023-03-27T060000Z.grib
         time_str = (" ").join(grib_file.split("_")[-1].split(".")[0][:-1].split("T"))
+        #print(time_str) # -> 2023-03-27 060000
         time_str = time_str[:-4] + ":" + time_str[-4:-2] + ":" + time_str[-2:]
+        #print(time_str) # -> 2023-03-27 06:00:00
         
         values = {}
         before = findBefore(DMI_API_KEY, href)
@@ -114,6 +132,7 @@ def updateDMIData(DMI_API_KEY, engine, meta, dbsm):
             continue
         
         for DMI_idx in DMI_idxs:
+            #print(DMI_idx['idx'])
             grb = grbs[DMI_idx['idx']]
 
             values[DMI_idx['mtype']] = np.array(grb['values']).reshape(-1)
@@ -139,8 +158,20 @@ def updateDMIData(DMI_API_KEY, engine, meta, dbsm):
 
         with dbsm() as session:
             DMI_Table = Table("dmi", meta, autoload_with=engine) # Table Reflection
-            session.execute(insert(DMI_Table), buildDBRecords(data, time_str))
+            s = insert(DMI_Table)
+            s = s.on_conflict_do_nothing(
+                index_elements=[DMI_Table.c.geom, DMI_Table.c.dt]
+            )
+            session.execute(s, buildDBRecords(data, time_str))
             session.commit()
+    
+    # Clean-up
+    files_to_remove = glob.glob('./*.grib')
+    mr = (last.split('/')[-1]).split("_")[-2][:-1]
+    for f in files_to_remove:
+        f_mr = f.split("_")[-2][:-1]
+        if(not f_mr == mr): # Only remove files if not from the latest model-run
+            os.remove(f)
 
 if(__name__ == "__main__"):
     env_path = Path('./.env')

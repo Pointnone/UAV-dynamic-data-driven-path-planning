@@ -25,9 +25,11 @@ CREATE TABLE dmi (
     windspd_meas FLOAT,
     dt TIMESTAMP,
     sim BOOLEAN,
-    sim_layer INTEGER
+    sim_layer INTEGER,
+    UNIQUE (geom, dt)    
 );
 
+-- TODO: May need to give unique ids? Or use names of infrastructure
 CREATE TABLE df (
     geom GEOMETRY,
     itype VARCHAR(10),
@@ -36,7 +38,7 @@ CREATE TABLE df (
 );
 
 CREATE TABLE cell (
-    geom GEOMETRY,
+    geom GEOMETRY UNIQUE,
     technology VARCHAR(15),
     sim BOOLEAN,
     sim_layer INTEGER
@@ -44,7 +46,7 @@ CREATE TABLE cell (
 
 CREATE TABLE zone (
     geom GEOMETRY,
-    zname VARCHAR(25) PRIMARY KEY NOT NULL,
+    zname VARCHAR(25) UNIQUE PRIMARY KEY NOT NULL,
     ztype VARCHAR(15),
     sim BOOLEAN,
     sim_layer INTEGER
@@ -59,4 +61,12 @@ CREATE TABLE notam (
     CONSTRAINT fk_zone
         FOREIGN KEY(zname) 
 	        REFERENCES zone(zname)
+);
+
+CREATE TABLE drone_paths (
+	drone VARCHAR(16) NOT NULL,
+	path GEOMETRY NOT NULL,
+	cost FLOAT NOT NULL,
+	start_time TIMESTAMP NOT NULL,
+	CONSTRAINT drone_paths_pk PRIMARY KEY (drone)
 );

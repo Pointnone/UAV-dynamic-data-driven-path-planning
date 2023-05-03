@@ -17,9 +17,12 @@ import xml.etree.ElementTree as ET
 import pyproj as proj
 from geojson import Polygon
 
-from sqlalchemy import Table, Column, Float, Integer, String, MetaData, create_engine, insert
+from sqlalchemy import Table, delete, insert
+#from sqlalchemy.dialects.postgresql import insert # Dialect runs into the index size being exceeded
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.engine import URL
+
+from geoalchemy2 import Geometry, shape
 
 def downloadDF(DF_USER, DF_PASS):
     host = "ftp3.datafordeler.dk"
@@ -89,18 +92,32 @@ def buildCityDBRecords(cities, is_sim = False, sim_layer = 0):
     return records
 
 def updateDFData(DF_USER, DF_PASS, engine, meta, dbsm):
-    filename = downloadDF(DF_USER, DF_PASS)
-    #filename = "DKstednavneBearbejdedeNohist_GML321_20230205080000.zip" # Manual override in case of no files on DF servers
+    manual = False
+    #filename = downloadDF(DF_USER, DF_PASS)
+    #print(filename)
+    filename = "DKstednavneBearbejdedeNohist_GML321_20230205080000.zip"; manual = True # Manual override in case of no files on DF servers
     
     if(filename):
         # TODO: Add other sources?
-        unzip(filename, "bebyggelse.gml")
-        cities = extractCityShapes("bebyggelse.gml")
+        bb_filename = "bebyggelse.gml"
+        unzip(filename, bb_filename)
+        cities = extractCityShapes(bb_filename)
 
         with dbsm() as session:
             DF_Table = Table("df", meta, autoload_with=engine) # Table Reflection
+
+            # Drop table instead of upsert reason:
+            # sqlalchemy.exc.OperationalError: (psycopg2.errors.ProgramLimitExceeded) index row requires 30224 bytes, maximum size is 8191
+            # Consider adding another identifier like name and / or unique and extractable id
+            session.execute(delete(DF_Table))
+
             session.execute(insert(DF_Table), buildCityDBRecords(cities))
             session.commit()
+        
+        # Clean-up
+        os.remove(bb_filename)
+        if(not manual):
+            os.remove(filename)
     
 #if(__name__ == "__main__"):
 #    filename = downloadDF()
