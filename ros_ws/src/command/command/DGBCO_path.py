@@ -2,12 +2,12 @@ try:
     from utils import *
     from path_info_extract import *
     from path_sim import *
-    from simple_path import _cost_path, Cost_Analyser
+    from simple_path import Cost_Analyser
 except ImportError:
     from .utils import *
     from .path_info_extract import *
     from .path_sim import *
-    from .simple_path import _cost_path, Cost_Analyser
+    from .simple_path import Cost_Analyser
 
 from shapely import Point, LineString, STRtree, distance, prepare, contains, intersects, envelope, buffer, box, to_geojson
 import pyproj as proj
@@ -18,7 +18,7 @@ import time
 
 import random as rnd
 
-tables = ["df", "cell", "zone"] # ["df", "dmi", "cell", "zone"]
+tables = ["dmi"] # ["df", "dmi", "cell", "zone"]
 g = Geod(ellps="WGS84")
 
 class DGBCO_Particle:
@@ -228,7 +228,7 @@ def find_path(home, dest, engine, meta, dbsm):
 
     #path = [(10.3245895, 55.4718524), (10.3145895, 55.2518524), (10.2945895, 55.1518524)]
     path = _init_path(wps)
-    path, cost = _iterate_path(path, path_dat, datetime(2023, 4, 3, 12, 00, 00), bounds)
+    path, cost = _iterate_path(path, path_dat, datetime(2023, 4, 26, 20, 00, 00), bounds)
 
     return path, cost
 
@@ -241,3 +241,4 @@ if(__name__ == "__main__"):
         path, cost = find_path((10.3245895, 55.4718524), (10.3145895, 55.2518524), engine, meta, dbsm)
         end = time.time()
         print(f'Cost: {cost} - Elapsed time: {end-start}')
+        print(to_geojson(LineString(path)))
