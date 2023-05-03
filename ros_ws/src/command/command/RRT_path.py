@@ -23,6 +23,7 @@ g = Geod(ellps="WGS84")
 
 # Implementation cross between Anytime RRT and MA-RRT
 choose_target_goal_sample_rate = 0.25
+edge_length = 150
 k = 10
 
 kappa_rate = 0.000625
@@ -78,7 +79,6 @@ class Tree:
         self.bounds = bounds
 
         self.cost_analyser = Cost_Analyser(path_dat, [])
-        self.length = 100.0
         self.h_val = 1
         self.nodes = []
 
@@ -143,17 +143,17 @@ class Tree:
         n_x, n_y = nearest.xy; n_x = list(n_x)[0]; n_y = list(n_y)[0]
         t_x, t_y = target.xy; t_x = list(t_x)[0]; t_y = list(t_y)[0]
 
-        # Extend from nearest towards target but only up to self.length 
-        # If target is within self.length of nearest point return target
+        # Extend from nearest towards target but only up to edge_length 
+        # If target is within edge_length of nearest point return target
         inv_res = g.inv(n_x, n_y, t_x, t_y, return_back_azimuth=False)
         dist = inv_res[idx_dist]
         
-        if(dist >= self.length):
+        if(dist >= edge_length):
             fwd_az = inv_res[idx_fwd_azimuth]
 
             #print(fwd_az)
 
-            res = g.fwd(n_x, n_y, fwd_az, self.length)
+            res = g.fwd(n_x, n_y, fwd_az, edge_length)
             res_lon = res[0]
             res_lat = res[1]
 
@@ -185,8 +185,8 @@ class Tree:
 
                 new_node_edge_cost = self._cost_edge(nearest_node, new_point)
 
-                # TODO: Partial self.length should return n.toa + distance / sim_flight_speed
-                toa = nearest_node.toa + timedelta(0, sim_flight_temp_res) if intermediate_point else nearest_node.toa
+                # TODO: Partial edge_length should return n.toa + distance / sim_flight_speed
+                toa = nearest_node.toa + timedelta(0, edge_length / sim_flight_speed) if intermediate_point else nearest_node.toa
                 cost = nearest_node.cost + new_node_edge_cost
                 #print(f'Nearest node rank: {nearest_node.rank}')
                 #print(f'Nearest node cost: {nearest_node.cost}')
@@ -220,22 +220,20 @@ class Tree:
         point_path = [ n.point for n in node_path ]
         return point_path
     
-def find_path(home, dest, engine, meta, dbsm):
+def find_path(home, dest, engine = None, meta = None, dbsm = None, path_dat = None, start_time = datetime(2023, 4, 26, 20, 00, 00)):
     wps = [home, dest]
 
-    bounds = list(LineString(wps).bounds)
-    radius = 0.25
-    bounds[0] = bounds[0] - radius
-    bounds[1] = bounds[1] - radius
-    bounds[2] = bounds[2] + radius
-    bounds[3] = bounds[3] + radius
-    bbox = box(bounds[0], bounds[1], bounds[2], bounds[3]) 
-    path_dat = extract_db_data(tables, engine, meta, dbsm, wps, 0.25, bbox)
-
-    #print(path_dat)
-
+    if(path_dat == None):
+        bounds = list(LineString(wps).bounds)
+        radius = 0.25
+        bounds[0] = bounds[0] - radius
+        bounds[1] = bounds[1] - radius
+        bounds[2] = bounds[2] + radius
+        bounds[3] = bounds[3] + radius
+        bbox = box(bounds[0], bounds[1], bounds[2], bounds[3]) 
+        path_dat = extract_db_data(tables, engine, meta, dbsm, wps, 0.25, bbox)
     RRT = Tree(path_dat, wps, bounds)
-    return RRT.iterate(datetime(2023, 4, 3, 12, 00, 00), 10, 15.0, 1.0)
+    return RRT.iterate(start_time)
 
 if(__name__ == "__main__"):
     env = environmentVars()
