@@ -39,7 +39,7 @@ CREATE TABLE df (
 
 CREATE TABLE cell (
     geom GEOMETRY UNIQUE,
-    technology VARCHAR(15),
+    technology VARCHAR(300),
     sim BOOLEAN,
     sim_layer INTEGER
 );

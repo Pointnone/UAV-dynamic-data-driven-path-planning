@@ -101,6 +101,7 @@ class Cost_Analyser():
             windspds = [ p['windspd_meas'] for p in pos_map ]
             windspds = [ (s if s >= 5.0 else 0.0) for s in windspds ]
             cost_per_pos = cost_per_pos + precips + windspds
+        #print(f'Post DMI: {reduce(lambda a,b: a+b, cost_per_pos)}')
 
         if(hasattr(self, "cell_stree")):
             pos_map = []
@@ -121,6 +122,7 @@ class Cost_Analyser():
             dist_cost_func = lambda d : 0.0 if d >= min_dist and d <= max_dist else (((d-max_dist)*0.003)**2 if d > max_dist else ((d-min_dist)*0.02)**10)
             dist_cost = [ dist_cost_func(d) for d in dists_to_nearest ]
             cost_per_pos = cost_per_pos + dist_cost
+        #print(f'Post Cell: {reduce(lambda a,b: a+b, cost_per_pos)}')
 
         if(hasattr(self, "prepped_cities")):
             for pc in self.prepped_cities:
@@ -128,6 +130,7 @@ class Cost_Analyser():
                 cost_per_violation = 100.0
                 city_cost = [ (cost_per_violation if pc_violations[i] else 0.0) for i, p in enumerate(pos) ]
                 cost_per_pos = cost_per_pos + city_cost
+        #print(f'Post City: {reduce(lambda a,b: a+b, cost_per_pos)}')
         
         if(hasattr(self, "prepped_zones")):
             for pz in self.prepped_zones:
@@ -136,8 +139,9 @@ class Cost_Analyser():
 
                 cost_per_violation = 1000.0
                 zone_cost = [ (cost_per_violation if (pz_violations[i] and (p[2] >= self.notams_by_zname[zname]['act_from'] and p[2] <= self.notams_by_zname[zname]['act_to'])) else 0.0 ) for i, p in enumerate(pos) ]
-
+                
                 cost_per_pos = cost_per_pos + zone_cost
+        #print(f'Post Zone: {reduce(lambda a,b: a+b, cost_per_pos)}')
 
         cost_per_pos = cost_per_pos + ((sim_dist*sim_temp_res) / 100)
         #print(len(cost_per_pos))

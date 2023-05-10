@@ -15,7 +15,7 @@ class IngestService(Node):
         super().__init__('ingest_service')
         
         self.publisher_ = self.create_publisher(String, 'ingest/update', 10)
-        timer_period = 300  # seconds
+        timer_period = 900  # seconds
         self.timer = self.create_timer(timer_period, self.ingest)
 
         self.env = environmentVars()
@@ -30,7 +30,7 @@ class IngestService(Node):
             new_inf_TDC = updateTDCData(self.engine, self.meta, self.dbsm)
             new_inf_Naviair = updateNaviairData(self.env['NAVIAIR_API_KEY'], self.engine, self.meta, self.dbsm)
             new_inf_DF = updateDFData(self.env['DF_USER'], self.env['DF_PASS'], self.engine, self.meta, self.dbsm)
-            new_inf_DMI = updateDMIData(self.env['DMI_API_KEY'], self.engine, self.meta, self.dbsm)
+            #new_inf_DMI = updateDMIData(self.env['DMI_API_KEY'], self.engine, self.meta, self.dbsm)
             #new_inf = new_inf_TDC or new_inf_Naviair or new_inf_DF or new_inf_DMI
         except:
             print("Caught exception")

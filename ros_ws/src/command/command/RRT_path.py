@@ -18,13 +18,13 @@ import time
 
 import random as rnd
 
-tables = ["df", "cell", "zone"]
+tables = ["zone"] # ["df", "dmi", "cell", "zone"]
 g = Geod(ellps="WGS84")
 
 # Implementation cross between Anytime RRT and MA-RRT
-choose_target_goal_sample_rate = 0.25
-edge_length = 150
-k = 10
+choose_target_goal_sample_rate = 0.05
+edge_length = 1500
+k = 25
 
 kappa_rate = 0.000625
 def get_k_Nearest_Neighbours(stree, points, target, k):
@@ -50,7 +50,7 @@ def get_k_Nearest_Neighbours(stree, points, target, k):
     k_nearest_idxs = [ idxs[sorted_idxs[i]] for i in range(k) ]
     return k_nearest_idxs, k_nearest_points
 
-class Node:
+class RRT_Node:
     def __init__(self, point, time_of_arrival, cost, parent):
         self.point = point
         self.toa = time_of_arrival
@@ -158,20 +158,21 @@ class Tree:
             res_lat = res[1]
 
             new = Point(res_lon, res_lat)
-            return new, True
-        return target, False
+            return new, dist
+        return target, dist
     
     def iterate(self, start_time, batch_size = 10, sim_flight_speed = 15.0, sim_flight_temp_res = 1.0):
-        self.nodes.append(Node(self.home, start_time, 0.0, None))
+        self.nodes.append(RRT_Node(self.home, start_time, 0.0, None))
 
         done = False
         iter = 0
-        shortest_dist = float("inf")
+        #shortest_dist = float("inf")
 
-        t_x, t_y = self.dest.xy; t_x = list(t_x)[0]; t_y = list(t_y)[0]
+        #t_x, t_y = self.dest.xy; t_x = list(t_x)[0]; t_y = list(t_y)[0]
 
         while(not done):
-            print(f"Doing batch {iter+1}"); iter += 1
+            #print(f"Doing batch {iter+1}"); 
+            iter += 1
             targets = [ self._choose_target() for _ in range(batch_size) ] 
             nearest_nodes_and_costs = self._nearest_neighbour(targets)
 
@@ -180,33 +181,33 @@ class Tree:
                 #path_cost = n[1]
                 #print(f'Target: {targets[i]}')
                 #print(f'Nearest: {nearest_node.point}')
-                new_point, intermediate_point = self._extend(nearest_node.point, targets[i])
+                new_point, extend_dist = self._extend(nearest_node.point, targets[i])
                 #print(f'New point: {new_point}')
 
                 new_node_edge_cost = self._cost_edge(nearest_node, new_point)
 
                 # TODO: Partial edge_length should return n.toa + distance / sim_flight_speed
-                toa = nearest_node.toa + timedelta(0, edge_length / sim_flight_speed) if intermediate_point else nearest_node.toa
+                toa = nearest_node.toa + timedelta(0, extend_dist / sim_flight_speed)
                 cost = nearest_node.cost + new_node_edge_cost
                 #print(f'Nearest node rank: {nearest_node.rank}')
                 #print(f'Nearest node cost: {nearest_node.cost}')
                 #print(f'New edge cost: {new_node_edge_cost}')
                 #print(f'New node cost {cost}')
-                new_node = Node(new_point, toa, cost, nearest_node)
+                new_node = RRT_Node(new_point, toa, cost, nearest_node)
                 
                 self.nodes.append(new_node)
 
-                n_x, n_y = new_point.xy; n_x = list(n_x)[0]; n_y = list(n_y)[0]
-                inv_res = g.inv(n_x, n_y, t_x, t_y)
-                dist = inv_res[2]
-                if(shortest_dist > dist):
-                    print(f'Shortest dist: {dist}')
-                    print(f'Node rank: {new_node.rank}')
-                    shortest_dist = dist
+                #n_x, n_y = new_point.xy; n_x = list(n_x)[0]; n_y = list(n_y)[0]
+                #inv_res = g.inv(n_x, n_y, t_x, t_y)
+                #dist = inv_res[2]
+                #if(shortest_dist > dist):
+                #    print(f'Shortest dist: {dist}')
+                #    print(f'RRT_Node rank: {new_node.rank}')
+                #    shortest_dist = dist
 
                 done = done or new_point == self.dest
                 if(done):
-                    self.dest = Node(self.dest, new_node.toa + timedelta(0, sim_flight_temp_res) if intermediate_point else new_node.toa, self._cost_edge(new_node, self.dest), new_node)
+                    self.dest = new_node # RRT_Node(self.dest, new_node.toa + timedelta(0, extend_dist / sim_flight_speed), self._cost_edge(new_node, self.dest), new_node)
                     break
                 #print(f'New Node Rank: {new_node.rank}')
                 
@@ -216,22 +217,29 @@ class Tree:
             node_path.append(current)
 
             current = current.parent
+        node_path.append(current) # Add home at last
+
+        print(f"Finished after: {iter} iterations")
+        print(f"End node RRT-rank is: {self.dest.rank}")
         
         point_path = [ n.point for n in node_path ]
-        return point_path
+        point_path.reverse() # Reverse to put home first
+        return point_path, self.dest.cost
     
 def find_path(home, dest, engine = None, meta = None, dbsm = None, path_dat = None, start_time = datetime(2023, 4, 26, 20, 00, 00)):
     wps = [home, dest]
 
+    bounds = list(LineString(wps).bounds)
+    radius = 0.25
+    bounds[0] = bounds[0] - radius
+    bounds[1] = bounds[1] - radius
+    bounds[2] = bounds[2] + radius
+    bounds[3] = bounds[3] + radius
+
     if(path_dat == None):
-        bounds = list(LineString(wps).bounds)
-        radius = 0.25
-        bounds[0] = bounds[0] - radius
-        bounds[1] = bounds[1] - radius
-        bounds[2] = bounds[2] + radius
-        bounds[3] = bounds[3] + radius
         bbox = box(bounds[0], bounds[1], bounds[2], bounds[3]) 
         path_dat = extract_db_data(tables, engine, meta, dbsm, wps, 0.25, bbox)
+
     RRT = Tree(path_dat, wps, bounds)
     return RRT.iterate(start_time)
 
@@ -239,5 +247,10 @@ if(__name__ == "__main__"):
     env = environmentVars()
     engine, meta, dbsm = setupDB(env['DB_USER'], env['DB_PASS'])
 
-    path = find_path((10.3245895, 55.4718524), (10.3145895, 55.2518524), engine, meta, dbsm)
-    print(to_geojson(LineString(path)))
+    for i in range(10):
+        start = time.time()
+        path, path_cost = find_path((10.3245895, 55.4718524), (10.3145895, 55.2518524), engine, meta, dbsm)
+        end = time.time()
+        print(f'Cost: {path_cost} - Elapsed time: {end-start}')
+        print(to_geojson(LineString(path)))
+        print("-----")

@@ -1,5 +1,6 @@
 geometry_msgs/Point home
 geometry_msgs/Point dest
+string<=20 drone
 string<=20 req_datetime
 string<=10 algo
 ---
