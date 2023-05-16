@@ -71,12 +71,12 @@ class DB_Handler():
                 row['path'] = shape.to_shape(row['path'])
             return res
 
-    def insert_into_table(self, table_name, data):
+    def insert_drone_into_drone_paths(self, data):
         with self.dbsm() as session:
-            C_Table = Table(table_name, self.meta, autoload_with=self.engine)
+            C_Table = Table("drone_paths", self.meta, autoload_with=self.engine)
             s = insert(C_Table)
             s = s.on_conflict_do_update(
-                set_=dict(s.excluded.items())
+                index_elements=[C_Table.c.drone], set_=dict(s.excluded.items())
             )
             session.execute(s, data)
             session.commit()

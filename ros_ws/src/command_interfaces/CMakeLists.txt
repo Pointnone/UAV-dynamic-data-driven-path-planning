@@ -28,6 +28,7 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/RequestPath.srv"
+  "srv/UploadLineString.srv"
   DEPENDENCIES geometry_msgs
 )
 

@@ -18,7 +18,7 @@ import time
 
 import random as rnd
 
-tables = ["zone"] # ["df", "dmi", "cell", "zone"]
+tables = ["df", "dmi", "cell", "zone"]
 g = Geod(ellps="WGS84")
 
 # Implementation cross between Anytime RRT and MA-RRT

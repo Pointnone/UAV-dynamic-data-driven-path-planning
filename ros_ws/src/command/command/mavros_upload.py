@@ -7,8 +7,9 @@ from std_msgs.msg import String
 
 import math
 import sys
+import time
 
-from shapely import LineString, box
+from shapely import LineString, box, to_wkt, from_wkt
 
 try:
     from simple_path import *
@@ -46,20 +47,39 @@ class PathPlanner(Node):
 
         env = environmentVars()
         self.engine, self.meta, self.dbsm = setupDB(env['DB_USER'], env['DB_PASS'])
-        self.db =  DB_Handler()
+        self.db = DB_Handler()
 
         self.mv_node = Node('mavros_upload')
         self.wp_clear_client = self.mv_node.create_client(mv_srv.WaypointClear, "mavros/mission/clear")
         self.wp_push_client = self.mv_node.create_client(mv_srv.WaypointPush, "mavros/mission/push")
-        #self.wp_pull_client = self.mv_node.create_client(mv_srv.WaypointPull, "mavros/mission/pull") # TODO: Use to get current mission and crop mission planning to the new items
+        self.wp_pull_client = self.mv_node.create_client(mv_srv.WaypointPull, "mavros/mission/pull")
 
         while not self.wp_clear_client.wait_for_service(timeout_sec=5.0):
-            self.mv_node.get_logger().info("mission/clear service not available")
+            self.get_logger().info("mission/clear service not available")
         while not self.wp_push_client.wait_for_service(timeout_sec=5.0):
-            self.mv_node.get_logger().info("mission/push service not available")
+            self.get_logger().info("mission/push service not available")
+        while not self.wp_pull_client.wait_for_service(timeout_sec=5.0):
+            self.get_logger().info("mission/pull service not available")
 
         self.ingest_sub = self.create_subscription(String, 'ingest/update', self.handle_ingest_update, 10)
-        self.mv_node.create_service(RequestPath, 'request_path', self.handle_mission_path_req)
+
+        self.waypoints_sub = self.mv_node.create_subscription(mv_msg.WaypointList, 'mavros/mission/waypoints', self.handle_waypoints_update, 10)
+        self.wp_update = False
+        self.wp_result = None
+
+        self.req_path_srv = self.create_service(RequestPath, 'commander/request_path', self.handle_mission_path_req)
+        self.upload_ls_srv = self.create_service(UploadLineString, 'commander/upload_linestring', self.handle_upload_linestring)
+
+    def handle_upload_linestring(self, req, res):
+        coords = linestring_to_coords(from_wkt(req.linestring))
+        items = convert_to_mavros(coords)
+        print(items)
+        self.send_mission(items, False)
+        return res
+
+    def handle_waypoints_update(self, msg):
+        self.wp_update = True
+        self.wp_result = msg
 
     def handle_ingest_update(self, msg):
         db_handle = DB_Handler()
@@ -89,46 +109,86 @@ class PathPlanner(Node):
             if(d['cost'] * (1-path_replanning_cost_margin) > new_cost or d['cost'] * (1+path_replanning_cost_margin) < new_cost):
                 # Replan
                 print("Doing replan")
-                point_path, new_path_cost = find_path(home, dest, path_dat=path_dat, start_time=start_time)
+                active = start_time < datetime.now()
+                if(not active):
+                    point_path, new_path_cost = find_path(home, dest, path_dat=path_dat, start_time=start_time)
+                else:
+                    # Pull path
+                    wp_pull_req = mv_srv.WaypointPull.Request()
+                    self.wp_update = False
+
+                    while(not self.wp_update):
+                        print("Getting state")
+                        pull_future = self.wp_pull_client.call_async(wp_pull_req)
+                        rclpy.spin_until_future_complete(self.mv_node, pull_future)
+                        time.sleep(5)
+
+                    # Stop the drone at the next waypoint
+                    print("Pausing at next waypoint")
+                    wps = self.wp_result.waypoints
+                    wps[self.wp_result.current_seq].autocontinue = False
+                    self.send_mission(wps, False)
+
+                    home = (wps[self.wp_result.current_seq].y_long, wps[self.wp_result.current_seq].x_lat) # Start from stopped at waypoint
+                    point_path, new_path_cost = find_path(home, dest, path_dat=path_dat, start_time=start_time)
+
                 new_wps = linestring_to_coords(LineString(point_path))
                 #new_path_cost, new_cost_per_waypoint = ca.analyse_cost(d['path'], start_time)
                 print(f"Found new path with cost: {new_path_cost}, old path cost: {new_cost}, original cost: {d['cost']}")
                 print(f"New path: {LineString(new_wps)}\n\nOld path: {d['path']}")
 
                 print("Uploading new mission")
-                self.send_mission(new_wps)
+                mavros_mission = convert_to_mavros(new_wps)
+                if(active):
+                    mavros_mission[0].is_current = False # Disable take-off
+                    mavros_mission[1].is_current = True # Set first waypoint, which is the current to is_current
+                    self.send_mission(mavros_mission, False)
+                else:
+                    self.send_mission(mavros_mission)
 
                 print("Update DB with new mission data")
                 d['cost'] = new_path_cost
-                d['path'] = LineString(new_wps)
-                db_handle.insert_into_table("drone_paths", [d])
+                d['path'] = to_wkt(LineString(new_wps))
+                db_handle.insert_drone_into_drone_paths([d])
             else:
                 print("Not doing replan, cost within margin")
                 print(f"Found new cost: {new_cost}, original cost: {d['cost']}")
 
     def handle_mission_path_req(self, req, res):
-        home = (req.home[0], req.home[1])
-        dest = (req.dest[0], req.dest[1])
-        point_path, cost = find_path(home, dest, engine, meta, dbsm)
+        print("Got a path req")
+        print(req)
+        home = (req.home.x, req.home.y)
+        dest = (req.dest.x, req.dest.y)
+        print("Pathfinding")
+        point_path, cost = find_path(home, dest, self.engine, self.meta, self.dbsm)
         waypoints = linestring_to_coords(LineString(point_path))
 
-        drone_path_record = {"drone": req.drone, "path": LineString(waypoints), "cost": cost, "start_time": req.req_datetime}
-        self.db.insert_into_table("drone_paths", [drone_path_record])
+        print("Putting in DB")
+        drone_path_record = {"drone": req.drone, "path": to_wkt(LineString(waypoints)), "cost": cost, "start_time": req.req_datetime}
+        self.db.insert_drone_into_drone_paths([drone_path_record])
 
-        self.send_mission(waypoints)
+        print("Uploading to drone")
+        mavros_mission = convert_to_mavros(waypoints)
+        self.send_mission(mavros_mission)
+        print("Sent mission")
         return res
 
-    def send_mission(self, waypoints):
-        wp_clear_req = mv_srv.WaypointClear.Request()
-        clear_future = self.wp_clear_client.call_async(wp_clear_req)
-        rclpy.spin_until_future_complete(self.mv_node, clear_future)
+    def send_mission(self, mission_items, clear=True):
+        print("Got into send_mission")
+        if(clear):
+            wp_clear_req = mv_srv.WaypointClear.Request()
+            clear_future = self.wp_clear_client.call_async(wp_clear_req)
+            rclpy.spin_until_future_complete(self.mv_node, clear_future)
+            print("Sent clear")
         
         wp_push_req = mv_srv.WaypointPush.Request()
-        wp_push_req.waypoints = convert_to_mavros(waypoints)
+        wp_push_req.waypoints = mission_items
         wp_push_req.start_index = 0
         
         future = self.wp_push_client.call_async(wp_push_req)
+        print("Wait spinning")
         rclpy.spin_until_future_complete(self.mv_node, future)
+        print("Done spinning")
         return future.result()
 
 def main(args=None):
