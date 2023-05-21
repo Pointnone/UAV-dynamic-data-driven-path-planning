@@ -26,7 +26,7 @@ CREATE TABLE dmi (
     dt TIMESTAMP,
     sim BOOLEAN,
     sim_layer INTEGER,
-    UNIQUE (geom, dt)    
+    UNIQUE (geom, dt)
 );
 
 -- TODO: May need to give unique ids? Or use names of infrastructure
@@ -70,3 +70,8 @@ CREATE TABLE drone_paths (
 	start_time TIMESTAMP NOT NULL,
 	CONSTRAINT drone_paths_pk PRIMARY KEY (drone)
 );
+
+CREATE INDEX dmi_geom_idx ON public.dmi using gist(geom);
+CREATE INDEX df_geom_idx ON public.df using gist(geom);
+CREATE INDEX cell_geom_idx ON public.cell using gist(geom);
+CREATE INDEX zone_geom_idx ON public.zone using gist(geom);
