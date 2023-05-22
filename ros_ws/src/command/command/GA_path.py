@@ -98,13 +98,16 @@ class GA_Agent:
         old_alleles = self.get_alleles()
         new_alleles = []
         for i,a in enumerate(old_alleles):
-            if(perc_small_vs_global_mutation >= rnd.random()): # Small mutation
-                new_alleles.insert(len(new_alleles), a + (rnd.random()*2-1)*self.small_ranges[0 if i % 2 == 0 else 1])
+            if(allele_mutate_rate >= rnd.random()):
+                if(perc_small_vs_global_mutation >= rnd.random()): # Small mutation
+                    new_alleles.append(a + (rnd.random()*2-1)*self.small_ranges[0 if i % 2 == 0 else 1])
+                else:
+                    #r = rnd.randint(0, len(vector)-1)
+                    b_min = self.bounds[0] if i % 2 != 1 else self.bounds[1]
+                    b_max = self.bounds[2] if i % 2 != 1 else self.bounds[3]
+                    new_alleles.append(b_min + rnd.random() * (b_max - b_min))
             else:
-                #r = rnd.randint(0, len(vector)-1)
-                b_min = self.bounds[0] if i % 2 != 1 else self.bounds[1]
-                b_max = self.bounds[2] if i % 2 != 1 else self.bounds[3]
-                new_alleles.insert(len(new_alleles), b_min + rnd.random() * (b_max - b_min))
+                new_alleles.append(a)
 
         self.set_alleles(new_alleles)
         self.cost_calculated = False
