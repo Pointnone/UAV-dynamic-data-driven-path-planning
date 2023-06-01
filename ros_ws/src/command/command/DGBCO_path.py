@@ -214,7 +214,7 @@ def _iterate_path(waypoints, path_dat, start_time, bounds, max_iter = 200, parti
 
     return best_path, best_cost
 
-def find_path(home, dest, engine, meta, dbsm):
+def find_path(home, dest, engine, meta, dbsm, start_time):
     wps = [home, dest]
 
     bounds = list(LineString(wps).bounds)
@@ -228,7 +228,7 @@ def find_path(home, dest, engine, meta, dbsm):
 
     #path = [(10.3245895, 55.4718524), (10.3145895, 55.2518524), (10.2945895, 55.1518524)]
     path = _init_path(wps)
-    path, cost = _iterate_path(path, path_dat, datetime(2023, 4, 26, 20, 00, 00), bounds)
+    path, cost = _iterate_path(path, path_dat, start_time, bounds)
 
     return path, cost
 
@@ -238,7 +238,7 @@ if(__name__ == "__main__"):
 
     for i in range(10):
         start = time.time()
-        path, cost = find_path((10.3245895, 55.4718524), (10.3145895, 55.2518524), engine, meta, dbsm)
+        path, cost = find_path((10.3245895, 55.4718524), (10.3145895, 55.2518524), engine, meta, dbsm, datetime(2023, 4, 26, 20, 00, 00))
         end = time.time()
         print(f'Cost: {cost} - Elapsed time: {end-start}')
         print(to_geojson(LineString(path)))

@@ -171,6 +171,7 @@ class PathPlanner(Node):
         mavros_mission = convert_to_mavros(waypoints)
         self.send_mission(mavros_mission)
         print("Sent mission")
+        res.success = True # Set success to true. TODO: should be dependent on the result of pathfinding.
         return res
 
     def send_mission(self, mission_items, clear=True):
